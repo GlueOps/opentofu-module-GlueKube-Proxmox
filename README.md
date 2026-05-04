@@ -1,0 +1,78 @@
+<!-- BEGIN_TF_DOCS -->
+# opentofu-module-GlueKube-Proxmox
+
+This opentofu module deploys a Kubernetes cluster on Proxmox VE using GlueKube.
+
+```hcl
+
+module "captain" {
+  source                     = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox.git"
+  gluekube_docker_image      = "ghcr.io/glueops/gluekube"
+  gluekube_docker_tag        = "v0.0.15-rc9"
+  cluster_name               = "my-cluster"
+  proxmox_node               = "pve"
+  datastore_id               = "local-lvm"
+  cloud_init_datastore_id    = "local"
+  calico_network_calico_cidr = "172.16.0.0/16"
+  network_service_cidr       = "10.96.0.0/12"
+
+  provider_credentials = {
+    endpoint  = "https://proxmox.example.com:8006"
+    api_token = "root@pam!terraform=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    insecure  = false
+  }
+
+  bastion = {
+    cores       = 4
+    memory      = 8192
+    disk_size   = 40
+    template_id = 9000
+  }
+
+  node_pools = [
+    {
+      "cores" : 4,
+      "memory" : 8192,
+      "disk_size" : 40,
+      "template_id" : 9000,
+      "role" : "master",
+      "name" : "master-node-pool",
+      "node_count" : 3,
+      "kubernetes_labels" : {},
+      "kubernetes_taints" : []
+    },
+    {
+      "cores" : 4,
+      "memory" : 8192,
+      "disk_size" : 40,
+      "template_id" : 9000,
+      "role" : "worker",
+      "name" : "glueops-platform-node-pool-1",
+      "node_count" : 2,
+      "kubernetes_labels" : {
+        "glueops.dev/role" : "glueops-platform"
+      },
+      "kubernetes_taints" : [
+        {
+          key    = "glueops.dev/role"
+          value  = "glueops-platform"
+          effect = "NoSchedule"
+        }
+      ]
+    },
+    {
+      "cores" : 4,
+      "memory" : 8192,
+      "disk_size" : 40,
+      "template_id" : 9000,
+      "role" : "worker",
+      "name" : "clusterwide-node-pool-1",
+      "node_count" : 2,
+      "kubernetes_labels" : {},
+      "kubernetes_taints" : []
+    }
+  ]
+}
+```
+
+<!-- END_TF_DOCS -->

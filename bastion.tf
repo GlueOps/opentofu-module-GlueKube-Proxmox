@@ -1,0 +1,107 @@
+resource "autoglue_ssh_key" "bastion" {
+  name    = "${var.autoglue.autoglue_cluster_name}-bastion"
+  comment = "GlueKube bastion SSH Key"
+}
+
+resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
+  content_type = "snippets"
+  datastore_id = "local"
+  node_name    = var.bastion.proxmox_node
+
+  source_raw {
+    data = templatefile("${path.module}/cloudinit/cloud-init-bastion.yaml", {
+      public_key = autoglue_ssh_key.bastion.public_key
+      hostname   = "bastion"
+    })
+    file_name = "${var.autoglue.autoglue_cluster_name}-bastion-cloud-init.yaml"
+  }
+}
+
+
+resource "proxmox_virtual_environment_vm" "bastion" {
+  name      = "${var.autoglue.autoglue_cluster_name}-bastion"
+  node_name = var.bastion.proxmox_node
+
+  description = "GlueKube bastion"
+
+  machine       = "q35"
+  bios          = "ovmf"
+
+  cpu {
+    cores = var.bastion.cores
+    type  = "x86-64-v2-AES"
+  }
+
+  memory {
+    dedicated = var.bastion.memory
+    floating  = var.bastion.memory / 2
+  }
+
+  disk {
+    datastore_id = var.datastore_id
+    import_from = "local:import/noble-server-cloudimg-amd64.qcow2"
+    interface    = "virtio0"
+    iothread     = true
+    discard      = "on"
+    size         = var.bastion.disk_size
+  }
+
+  efi_disk {
+    datastore_id = "local"
+    file_format  = "qcow2"
+    type         = "4m"
+  }
+
+  initialization {
+    datastore_id = var.datastore_id
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+    ip_config {
+      ipv4 {
+        address = "dhcp"
+      }
+    }
+    user_data_file_id = proxmox_virtual_environment_file.bastion_cloud_init.id
+  }
+
+  network_device {
+    bridge = "vmbr_lan"
+  }
+
+  network_device {
+    bridge = "vmbr_public"
+  }
+
+  agent {
+    enabled = true
+    timeout = "15m"
+  }
+
+  started = true
+
+  startup {
+    order      = 1
+    up_delay   = 60
+    down_delay = 0
+  }
+}
+
+
+
+resource "autoglue_server" "bastion" {
+  depends_on         = [proxmox_virtual_environment_vm.bastion]
+  hostname           = "bastion"
+  private_ip_address = proxmox_virtual_environment_vm.bastion.ipv4_addresses[1][0]
+  public_ip_address  = proxmox_virtual_environment_vm.bastion.ipv4_addresses[2][0]
+  role               = "bastion"
+  ssh_key_id         = autoglue_ssh_key.bastion.id
+  ssh_user           = "cluster"
+}
+
+resource "autoglue_cluster_bastion" "bastion" {
+  cluster_id = autoglue_cluster.cluster.id
+  server_id  = autoglue_server.bastion.id
+}
