@@ -23,14 +23,6 @@ provider "proxmox" {
     agent       = true
     username    = "root"
     private_key = var.provider_credentials.private_key
-    # node {
-    #   name = "dev-ovh-hv-01"
-    #   address = "51.210.206.92"
-    # }
-    # node {
-    #   name = "dev-ovh-hv-02"
-    #   address = "51.210.206.95"
-    # }
   }
 }
 
