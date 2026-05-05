@@ -1,11 +1,19 @@
-variable "proxmox_node" {
-  type        = string
-  description = "The Proxmox node name to deploy VMs on"
-}
-
-variable "datastore_id" {
-  type        = string
-  description = "The Proxmox datastore ID for container disks"
+variable "proxmox_config" {
+  description = "Proxmox infrastructure configuration including network bridges and available hypervisor nodes."
+  type = object({
+    networks = object({
+      public = object({
+        name = string
+      })
+      private = object({
+        name = string
+      })
+      nat = object({
+        name = string
+      })
+    })
+    available_nodes = list(string)
+  })
 }
 
 variable "cores" {
@@ -70,4 +78,9 @@ variable "cluster_name" {
 
 variable "attached" {
   type = bool
+}
+
+variable "datastore_id" {
+  type        = string
+  description = "The Proxmox datastore ID for container disks"
 }

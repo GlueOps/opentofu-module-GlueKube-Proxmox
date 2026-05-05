@@ -12,9 +12,9 @@ module "node_pool" {
   kubernetes_taints       = each.value.kubernetes_taints
   kubernetes_annotations  = each.value.kubernetes_annotations
   cluster_name            = var.autoglue.autoglue_cluster_name
-  proxmox_node            = each.value.proxmox_node
   datastore_id            = var.datastore_id
   attached                = each.value.attached
+  proxmox_config          = var.proxmox_config
 }
 
 resource "autoglue_cluster_node_pools" "autoglue_cluster_node_pools" {

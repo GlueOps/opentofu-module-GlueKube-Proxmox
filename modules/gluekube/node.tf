@@ -7,7 +7,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
   for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
   content_type = "snippets"
   datastore_id = "local"
-  node_name    = var.proxmox_node
+  node_name    = var.proxmox_config.available_nodes[tonumber(each.key) % length(var.proxmox_config.available_nodes)]
 
   source_raw {
     data = templatefile("${path.module}/cloudinit/cloud-init-${var.role}.yaml", {
@@ -19,21 +19,12 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
 }
 
 
-# resource "proxmox_download_file" "ubuntu_noble_img" {
-#   content_type       = "iso"
-#   datastore_id       = "local"
-#   file_name          = "noble-server-cloudimg-amd64.img"
-#   node_name          = var.proxmox_node
-#   url                = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
-#   overwrite          = true
-# }
-
 
 resource "proxmox_virtual_environment_vm" "cluster_node" {
   for_each  = toset([for i in range(0, var.node_count) : tostring(i)])
   name      = "${var.role}-${var.name}-${each.key}"
-  node_name = var.proxmox_node
-
+  node_name = var.proxmox_config.available_nodes[tonumber(each.key) % length(var.proxmox_config.available_nodes)]
+  
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
   machine       = "q35"
@@ -83,21 +74,17 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
     user_data_file_id = proxmox_virtual_environment_file.node_cloud_init[each.key].id
 
-    user_account {
-      password = "changeme"
-      username = "ubuntu"
-    }
   }
   
   dynamic "network_device" {
     for_each = var.subnet == "public" ? [1] : []
     content {
-      bridge = "vmbr_lan"
+      bridge = var.proxmox_config.networks.private.name
     }
   }
 
   network_device {
-    bridge = var.subnet == "public" ? "vmbr_public" : "vmbr_nat"
+    bridge = var.subnet == "public" ? var.proxmox_config.networks.public.name : var.proxmox_config.networks.nat.name
   }
 
   
@@ -109,12 +96,6 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
   started = true
 
-  startup {
-    order      = 1
-    up_delay   = 60
-    down_delay = 0
-  }
 
- 
-  
+  tags = [var.cluster_name, var.role, var.name]
 }

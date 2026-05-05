@@ -74,6 +74,29 @@ variable "autoglue" {
   })
 }
 
+variable "proxmox_config" {
+  description = "Proxmox infrastructure configuration including network bridges and available hypervisor nodes."
+  type = object({
+    networks = object({
+      public = object({
+        name = string
+      })
+      private = object({
+        name = string
+      })
+      nat = object({
+        name = string
+      })
+    })
+    available_nodes = list(string)
+  })
+
+  validation {
+    condition     = length(var.proxmox_config.available_nodes) > 0
+    error_message = "proxmox_config.available_nodes must contain at least one node."
+  }
+}
+
 variable "node_pools" {
   type = list(object({
     name                   = string
@@ -82,7 +105,6 @@ variable "node_pools" {
     memory                 = number
     disk_size              = number
     role                   = string
-    proxmox_node           = string
     subnet                 = optional(string, "public")
     kubernetes_labels      = optional(map(string), {})
     kubernetes_annotations = optional(map(string), {})

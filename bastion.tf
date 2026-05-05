@@ -68,11 +68,11 @@ resource "proxmox_virtual_environment_vm" "bastion" {
   }
 
   network_device {
-    bridge = "vmbr_lan"
+    bridge = var.proxmox_config.networks.private.name
   }
 
   network_device {
-    bridge = "vmbr_public"
+    bridge = var.proxmox_config.networks.public.name
   }
 
   agent {
@@ -82,11 +82,7 @@ resource "proxmox_virtual_environment_vm" "bastion" {
 
   started = true
 
-  startup {
-    order      = 1
-    up_delay   = 60
-    down_delay = 0
-  }
+  tags = [var.autoglue.autoglue_cluster_name, "bastion"]
 }
 
 
