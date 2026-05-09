@@ -7,9 +7,12 @@ variable "proxmox_config" {
       })
       private = object({
         name = string
+        vlan_id = optional(number)
+
       })
       nat = object({
         name = string
+        vlan_id = optional(number)
       })
     })
     available_nodes = list(string)

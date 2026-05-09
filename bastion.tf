@@ -69,10 +69,13 @@ resource "proxmox_virtual_environment_vm" "bastion" {
 
   network_device {
     bridge = var.proxmox_config.networks.private.name
+    model   = "virtio"
+    vlan_id = var.proxmox_config.networks.private.vlan_id
   }
 
   network_device {
     bridge = var.proxmox_config.networks.public.name
+    model   = "virtio"
   }
 
   agent {

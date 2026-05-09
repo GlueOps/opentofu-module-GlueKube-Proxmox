@@ -80,11 +80,15 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
     for_each = var.subnet == "public" ? [1] : []
     content {
       bridge = var.proxmox_config.networks.private.name
+      model   = "virtio"
+      vlan_id = var.proxmox_config.networks.private.vlan_id
     }
   }
 
   network_device {
     bridge = var.subnet == "public" ? var.proxmox_config.networks.public.name : var.proxmox_config.networks.nat.name
+    model   = "virtio"
+    vlan_id = var.subnet == "public" ? null : var.proxmox_config.networks.nat.vlan_id
   }
 
   

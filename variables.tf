@@ -42,6 +42,15 @@ variable "network_service_cidr" {
   }
 }
 
+variable "calico_node_address_autodetection_v4" {
+  type    = string
+  default = null
+  validation {
+    condition     = var.calico_node_address_autodetection_v4 == null || can(cidrnetmask(var.calico_node_address_autodetection_v4))
+    error_message = "calico_node_address_autodetection_v4 must be a valid IPv4 CIDR block, for example: 10.62.0.0/15."
+  }
+}
+
 variable "bastion" {
   description = "Bastion configuration."
   type = object({
@@ -82,13 +91,15 @@ variable "proxmox_config" {
         name = string
       })
       private = object({
-        name = string
+        name    = string
+        vlan_id = optional(number)
       })
       nat = object({
-        name = string
+        name    = string
+        vlan_id = optional(number)
       })
     })
-    available_nodes = list(string)
+    available_nodes                      = list(string)
   })
 
   validation {
