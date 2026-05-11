@@ -5,7 +5,7 @@ This opentofu module deploys a Kubernetes cluster on Proxmox VE using GlueKube.
 
 ```hcl
 module "captain" {
-  source                               = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox-Hetzner.git"
+  source                               = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox.git"
   gluekube_docker_image                = "ghcr.io/glueops/gluekube"
   gluekube_docker_tag                  = "v1.34.5-gluekube.11"
   calico_network_calico_cidr           = "172.16.0.0/16"
