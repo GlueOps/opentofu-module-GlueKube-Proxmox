@@ -20,7 +20,7 @@ provider "proxmox" {
   api_token = var.provider_credentials.api_token
   insecure  = var.provider_credentials.insecure
   ssh {
-    agent       = true
+    agent       = false
     username    = "root"
     private_key = var.provider_credentials.private_key
   }
