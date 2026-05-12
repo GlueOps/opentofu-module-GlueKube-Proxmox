@@ -100,6 +100,8 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
   started = true
 
+  stop_on_destroy = true
+
 
   tags = [var.cluster_name, var.role, var.name]
 }
