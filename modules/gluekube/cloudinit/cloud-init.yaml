@@ -1,4 +1,7 @@
 #cloud-config
+package_reboot_if_required: true
+package_update: true
+package_upgrade: true
 packages:
   - curl
   - qemu-guest-agent
@@ -26,3 +29,6 @@ write_files:
 runcmd:
   - sudo sysctl --system
   - sudo systemctl enable --now qemu-guest-agent
+  - sudo systemctl disable --now unattended-upgrades.service apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt
+  - ip link property add dev eth1 altname public || true
+      

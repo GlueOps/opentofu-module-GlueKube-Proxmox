@@ -87,3 +87,9 @@ variable "datastore_id" {
   type        = string
   description = "The Proxmox datastore ID for container disks"
 }
+
+variable "ballooning" {
+  type        = bool
+  description = "Enable memory ballooning for this node pool"
+  default     = true
+}

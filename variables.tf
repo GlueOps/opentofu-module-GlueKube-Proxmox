@@ -124,7 +124,8 @@ variable "node_pools" {
       value  = string
       effect = string
     }))
-    attached = optional(bool, true)
+    attached   = optional(bool, true)
+    ballooning = optional(bool, true)
   }))
 
   validation {

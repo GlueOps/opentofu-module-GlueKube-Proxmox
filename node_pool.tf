@@ -14,6 +14,7 @@ module "node_pool" {
   cluster_name            = var.autoglue.autoglue_cluster_name
   datastore_id            = var.datastore_id
   attached                = each.value.attached
+  ballooning              = each.value.ballooning
   proxmox_config          = var.proxmox_config
 }
 

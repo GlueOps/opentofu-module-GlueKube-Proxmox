@@ -10,7 +10,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
   node_name    = var.proxmox_config.available_nodes[tonumber(each.key) % length(var.proxmox_config.available_nodes)]
 
   source_raw {
-    data = templatefile("${path.module}/cloudinit/cloud-init-${var.role}.yaml", {
+    data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {
       public_key = autoglue_ssh_key.ssh_key.public_key
       hostname   = "${var.role}-${var.name}-${each.key}"
     })
@@ -24,11 +24,11 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   for_each  = toset([for i in range(0, var.node_count) : tostring(i)])
   name      = "${var.role}-${var.name}-${each.key}"
   node_name = var.proxmox_config.available_nodes[tonumber(each.key) % length(var.proxmox_config.available_nodes)]
-  
+
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
-  machine       = "q35"
-  bios          = "ovmf"
+  machine = "q35"
+  bios    = "ovmf"
 
   cpu {
     cores = var.cores
@@ -37,12 +37,12 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
   memory {
     dedicated = var.memory
-    floating  = var.memory / 2
+    floating  = var.ballooning ? var.memory / 2 : var.memory
   }
 
   disk {
     datastore_id = var.datastore_id
-    import_from = "local:import/noble-server-cloudimg-amd64.qcow2"
+    import_from  = "local:import/noble-server-cloudimg-amd64.qcow2"
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
@@ -75,23 +75,23 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
     user_data_file_id = proxmox_virtual_environment_file.node_cloud_init[each.key].id
 
   }
-  
+
   dynamic "network_device" {
     for_each = var.subnet == "public" ? [1] : []
     content {
-      bridge = var.proxmox_config.networks.private.name
+      bridge  = var.proxmox_config.networks.private.name
       model   = "virtio"
       vlan_id = var.proxmox_config.networks.private.vlan_id
     }
   }
 
   network_device {
-    bridge = var.subnet == "public" ? var.proxmox_config.networks.public.name : var.proxmox_config.networks.nat.name
+    bridge  = var.subnet == "public" ? var.proxmox_config.networks.public.name : var.proxmox_config.networks.nat.name
     model   = "virtio"
     vlan_id = var.subnet == "public" ? null : var.proxmox_config.networks.nat.vlan_id
   }
 
-  
+
 
   agent {
     enabled = true
@@ -104,4 +104,61 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
 
   tags = [var.cluster_name, var.role, var.name]
+  lifecycle {
+    ignore_changes = [
+      "node_name"
+    ]
+  }
+
+}
+
+
+resource "proxmox_virtual_environment_firewall_rules" "inbound" {
+  for_each     = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
+  depends_on = [
+    proxmox_virtual_environment_vm.cluster_node,
+  ]
+
+  node_name = proxmox_virtual_environment_vm.cluster_node[each.key].node_name
+  vm_id     = proxmox_virtual_environment_vm.cluster_node[each.key].vm_id
+
+  rule {
+    type    = "in"
+    action  = "ACCEPT"
+    comment = "Allow HTTP"
+    dport   = "80"
+    proto   = "tcp"
+    log     = "info"
+    iface   = "net1"
+  }
+
+  rule {
+    type    = "in"
+    action  = "ACCEPT"
+    comment = "Allow HTTPS"
+    dport   = "443"
+    proto   = "tcp"
+    log     = "info"
+    iface   = "net1"
+
+  }
+
+  rule {
+    type    = "in"
+    action  = "DROP"
+    comment = "Allow SSH"
+    dport   = "22"
+    proto   = "tcp"
+    log     = "info"
+    iface   = "net1"
+  }
+
+  rule {
+    type    = "in"
+    action  = "ACCEPT"
+    comment = "Allow ICMP"
+    proto   = "icmp"
+    log     = "info"
+    iface   = "net1"
+  }
 }
