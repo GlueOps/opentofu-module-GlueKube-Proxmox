@@ -3,11 +3,16 @@ resource "autoglue_ssh_key" "ssh_key" {
   comment = "GlueKube ${var.role} SSH Key"
 }
 
+resource "random_shuffle" "available_nodes" {
+  input        = var.available_nodes
+  result_count = length(var.available_nodes)
+}
+
 resource "proxmox_virtual_environment_file" "node_cloud_init" {
   for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
   content_type = "snippets"
   datastore_id = "local"
-  node_name    = var.proxmox_config.available_nodes[tonumber(each.key) % length(var.proxmox_config.available_nodes)]
+  node_name    = random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)]
 
   source_raw {
     data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {
@@ -23,7 +28,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
 resource "proxmox_virtual_environment_vm" "cluster_node" {
   for_each  = toset([for i in range(0, var.node_count) : tostring(i)])
   name      = "${var.role}-${var.name}-${each.key}"
-  node_name = var.proxmox_config.available_nodes[tonumber(each.key) % length(var.proxmox_config.available_nodes)]
+  node_name = random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)]
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
@@ -33,6 +38,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   cpu {
     cores = var.cores
     type  = "x86-64-v2-AES"
+    numa  = true
   }
 
   memory {

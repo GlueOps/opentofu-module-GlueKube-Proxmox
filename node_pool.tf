@@ -15,6 +15,7 @@ module "node_pool" {
   datastore_id            = var.datastore_id
   attached                = each.value.attached
   ballooning              = each.value.ballooning
+  available_nodes         = each.value.available_nodes
   proxmox_config          = var.proxmox_config
 }
 

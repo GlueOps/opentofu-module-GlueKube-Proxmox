@@ -1,5 +1,5 @@
 variable "proxmox_config" {
-  description = "Proxmox infrastructure configuration including network bridges and available hypervisor nodes."
+  description = "Proxmox infrastructure configuration including network bridges."
   type = object({
     networks = object({
       public = object({
@@ -15,8 +15,17 @@ variable "proxmox_config" {
         vlan_id = optional(number)
       })
     })
-    available_nodes = list(string)
   })
+}
+
+variable "available_nodes" {
+  type        = list(string)
+  description = "List of Proxmox nodes to distribute VMs across for this node pool"
+
+  validation {
+    condition     = length(var.available_nodes) > 0
+    error_message = "available_nodes must contain at least one node."
+  }
 }
 
 variable "cores" {

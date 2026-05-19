@@ -84,7 +84,7 @@ variable "autoglue" {
 }
 
 variable "proxmox_config" {
-  description = "Proxmox infrastructure configuration including network bridges and available hypervisor nodes."
+  description = "Proxmox infrastructure configuration including network bridges."
   type = object({
     networks = object({
       public = object({
@@ -99,13 +99,7 @@ variable "proxmox_config" {
         vlan_id = optional(number)
       })
     })
-    available_nodes                      = list(string)
   })
-
-  validation {
-    condition     = length(var.proxmox_config.available_nodes) > 0
-    error_message = "proxmox_config.available_nodes must contain at least one node."
-  }
 }
 
 variable "node_pools" {
@@ -124,8 +118,9 @@ variable "node_pools" {
       value  = string
       effect = string
     }))
-    attached   = optional(bool, true)
-    ballooning = optional(bool, true)
+    attached        = optional(bool, true)
+    ballooning      = optional(bool, true)
+    available_nodes = list(string)
   }))
 
   validation {
@@ -141,5 +136,10 @@ variable "node_pools" {
   validation {
     condition     = alltrue([for np in var.node_pools : contains(["public", "private"], np.subnet)])
     error_message = "Each node pool subnet must be either 'public' or 'private'."
+  }
+
+  validation {
+    condition     = alltrue([for np in var.node_pools : length(np.available_nodes) > 0])
+    error_message = "Each node pool must have at least one node in available_nodes."
   }
 }
