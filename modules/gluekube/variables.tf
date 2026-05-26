@@ -6,12 +6,12 @@ variable "proxmox_config" {
         name = string
       })
       private = object({
-        name = string
+        name    = string
         vlan_id = optional(number)
 
       })
       nat = object({
-        name = string
+        name    = string
         vlan_id = optional(number)
       })
     })
@@ -26,6 +26,16 @@ variable "available_nodes" {
     condition     = length(var.available_nodes) > 0
     error_message = "available_nodes must contain at least one node."
   }
+}
+
+variable "shared_ssh_key_id" {
+  type        = string
+  description = "Cluster-wide SSH key ID used by all node pools"
+}
+
+variable "cloud_init_file_ids_by_node" {
+  type        = map(string)
+  description = "Map of Proxmox node name to cloud-init file ID"
 }
 
 variable "cores" {

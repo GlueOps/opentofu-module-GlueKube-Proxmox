@@ -4,7 +4,7 @@ resource "autoglue_server" "node" {
   private_ip_address = proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[1][0]
   public_ip_address  = var.subnet == "public" ? proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[2][0] : proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[1][0]
   role               = var.role
-  ssh_key_id         = autoglue_ssh_key.ssh_key.id
+  ssh_key_id         = var.shared_ssh_key_id
   ssh_user           = "cluster"
 }
 

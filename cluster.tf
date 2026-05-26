@@ -44,7 +44,7 @@ resource "autoglue_cluster_metadata" "calico_cidr" {
 }
 
 resource "autoglue_cluster_metadata" "calico_node_address_autodetection_v4" {
-  count = var.calico_node_address_autodetection_v4 != null ? 1 : 0
+  count      = var.calico_node_address_autodetection_v4 != null ? 1 : 0
   cluster_id = autoglue_cluster.cluster.id
   key        = "calico_node_address_autodetection_v4"
   value      = var.calico_node_address_autodetection_v4

@@ -1,25 +1,12 @@
-resource "autoglue_ssh_key" "ssh_key" {
-  name    = "${var.cluster_name}-${var.name}"
-  comment = "GlueKube ${var.role} SSH Key"
-}
-
 resource "random_shuffle" "available_nodes" {
   input        = var.available_nodes
   result_count = length(var.available_nodes)
 }
 
-resource "proxmox_virtual_environment_file" "node_cloud_init" {
-  for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
-  content_type = "snippets"
-  datastore_id = "local"
-  node_name    = random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)]
-
-  source_raw {
-    data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {
-      public_key = autoglue_ssh_key.ssh_key.public_key
-      hostname   = "${var.role}-${var.name}-${each.key}"
-    })
-    file_name = "${var.cluster_name}-${var.role}-${var.name}-${each.key}-cloud-init.yaml"
+locals {
+  vm_node_name_by_index = {
+    for i in range(0, var.node_count) :
+    tostring(i) => random_shuffle.available_nodes.result[i % length(random_shuffle.available_nodes.result)]
   }
 }
 
@@ -27,8 +14,8 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
 
 resource "proxmox_virtual_environment_vm" "cluster_node" {
   for_each  = toset([for i in range(0, var.node_count) : tostring(i)])
-  name      = "${var.role}-${var.name}-${each.key}"
-  node_name = random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)]
+  name      = "${var.cluster_name}-${var.role}-${var.name}-${each.key}"
+  node_name = local.vm_node_name_by_index[each.key]
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
@@ -78,8 +65,15 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
       }
     }
 
-    user_data_file_id = proxmox_virtual_environment_file.node_cloud_init[each.key].id
+    user_data_file_id = var.cloud_init_file_ids_by_node[local.vm_node_name_by_index[each.key]]
 
+  }
+
+  lifecycle {
+    precondition {
+      condition     = contains(keys(var.cloud_init_file_ids_by_node), local.vm_node_name_by_index[each.key])
+      error_message = "Missing shared cloud-init file id for selected Proxmox node."
+    }
   }
 
   dynamic "network_device" {
@@ -115,7 +109,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
 
 resource "proxmox_virtual_environment_firewall_rules" "inbound" {
-  for_each     = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
+  for_each = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
   depends_on = [
     proxmox_virtual_environment_vm.cluster_node,
   ]
