@@ -18,16 +18,6 @@ variable "proxmox_config" {
   })
 }
 
-variable "available_nodes" {
-  type        = list(string)
-  description = "List of Proxmox nodes to distribute VMs across for this node pool"
-
-  validation {
-    condition     = length(var.available_nodes) > 0
-    error_message = "available_nodes must contain at least one node."
-  }
-}
-
 variable "cores" {
   type        = number
   description = "Number of CPU cores per node"
@@ -101,4 +91,13 @@ variable "ballooning" {
   type        = bool
   description = "Enable memory ballooning for this node pool"
   default     = true
+}
+
+
+variable "waggle_datacenter_id" {
+  type = string
+}
+
+variable "waggle_slot_id" {
+  type = string
 }

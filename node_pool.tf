@@ -15,8 +15,9 @@ module "node_pool" {
   datastore_id            = var.datastore_id
   attached                = each.value.attached
   ballooning              = each.value.ballooning
-  available_nodes         = each.value.available_nodes
   proxmox_config          = var.proxmox_config
+  waggle_slot_id          = each.value.waggle_slot_id
+  waggle_datacenter_id    = each.value.waggle_datacenter_id
 }
 
 resource "autoglue_cluster_node_pools" "autoglue_cluster_node_pools" {

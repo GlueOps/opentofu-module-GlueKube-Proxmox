@@ -12,6 +12,10 @@ terraform {
       source  = "registry.terraform.io/GlueOps/autoglue"
       version = "0.10.12"
     }
+    waggle = {
+      source  = "registry.terraform.io/GlueOps/waggle"
+      version = "0.0.7"
+    }
   }
 }
 
@@ -37,4 +41,10 @@ provider "aws" {
   region     = var.autoglue.route_53_config.aws_region
   access_key = var.autoglue.route_53_config.aws_access_key_id
   secret_key = var.autoglue.route_53_config.aws_secret_access_key
+}
+
+
+provider "waggle" {
+  endpoint = var.waggle_endpoint
+  token = var.waggle_api_key
 }
