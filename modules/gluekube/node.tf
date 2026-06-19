@@ -1,17 +1,35 @@
+data "waggle_slots" "available_slots" {
+  name = var.waggle_slot_name
+}
+
+locals {
+  ram_gb = data.waggle_slots.available_slots.ram_gb * 1024
+}
+
+resource "autoglue_ssh_key" "ssh_key" {
+  name    = "${var.cluster_name}-${var.name}"
+  comment = "GlueKube ${var.role} SSH Key"
+}
 
 module "waggle" {
-  source = "./modules/waggle"
-  pool_name = "${var.cluster_name}-${var.role}"
-  slot_id = var.waggle_slot_id
-  desired_count = var.node_count
+  source               = "../waggle"
+  pool_name            = "${var.cluster_name}-${var.role}"
+  slot_id              = data.waggle_slots.available_slots.id
+  desired_count        = var.node_count
   waggle_datacenter_id = var.waggle_datacenter_id
+}
+
+
+resource "random_shuffle" "available_nodes" {
+  input        = var.available_nodes
+  result_count = length(var.available_nodes)
 }
 
 resource "proxmox_virtual_environment_file" "node_cloud_init" {
   for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
   content_type = "snippets"
   datastore_id = "local"
-  node_name    = module.waggle.nodes.node_placement[each.key].node
+  node_name    = length(var.available_nodes) > 0 ? random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)] : module.waggle.nodes_placement_targets[each.key].node
 
   source_raw {
     data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {
@@ -27,7 +45,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
 resource "proxmox_virtual_environment_vm" "cluster_node" {
   for_each  = toset([for i in range(0, var.node_count) : tostring(i)])
   name      = "${var.role}-${var.name}-${each.key}"
-  node_name = module.waggle.nodes.node_placement[each.key].node
+  node_name = length(var.available_nodes) > 0 ? random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)] : module.waggle.nodes_placement_targets[each.key].node
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
@@ -35,14 +53,14 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   bios    = "ovmf"
 
   cpu {
-    cores = var.cores
+    cores = data.waggle_slots.available_slots.vcpu
     type  = "x86-64-v2-AES"
     numa  = true
   }
 
   memory {
-    dedicated = var.memory
-    floating  = var.ballooning ? var.memory / 2 : var.memory
+    dedicated = data.waggle_slots.available_slots.ram_gb * 1024
+    floating  = var.ballooning ? data.waggle_slots.available_slots.ram_gb * 1024 / 2 : data.waggle_slots.available_slots.ram_gb * 1024
   }
 
   disk {
@@ -51,7 +69,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
-    size         = var.disk_size
+    size         = data.waggle_slots.available_slots.disk_gb
   }
 
   efi_disk {
@@ -114,7 +132,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
 
 resource "proxmox_virtual_environment_firewall_rules" "inbound" {
-  for_each     = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
+  for_each = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
   depends_on = [
     proxmox_virtual_environment_vm.cluster_node,
   ]

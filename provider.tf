@@ -14,7 +14,7 @@ terraform {
     }
     waggle = {
       source  = "registry.terraform.io/GlueOps/waggle"
-      version = "0.0.7"
+      version = "0.1.13"
     }
   }
 }

@@ -106,9 +106,6 @@ variable "node_pools" {
   type = list(object({
     name                   = string
     node_count             = number
-    cores                  = number
-    memory                 = number
-    disk_size              = number
     role                   = string
     subnet                 = optional(string, "public")
     kubernetes_labels      = optional(map(string), {})
@@ -118,9 +115,11 @@ variable "node_pools" {
       value  = string
       effect = string
     }))
-    attached        = optional(bool, true)
-    ballooning      = optional(bool, true)
     available_nodes = list(string)
+    attached             = optional(bool, true)
+    ballooning           = optional(bool, true)
+    waggle_slot_name     = optional(string)
+
   }))
 
   validation {
@@ -138,8 +137,17 @@ variable "node_pools" {
     error_message = "Each node pool subnet must be either 'public' or 'private'."
   }
 
-  validation {
-    condition     = alltrue([for np in var.node_pools : length(np.available_nodes) > 0])
-    error_message = "Each node pool must have at least one node in available_nodes."
-  }
+}
+
+
+variable "waggle_endpoint" {
+  type = string
+}
+
+variable "waggle_api_key" {
+  type = string
+}
+
+variable "waggle_datacenter_id" {
+  type = string
 }

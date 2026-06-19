@@ -8,6 +8,10 @@ terraform {
       source  = "registry.terraform.io/GlueOps/autoglue"
       version = "0.10.12"
     }
+    waggle = {
+      source  = "registry.terraform.io/GlueOps/waggle"
+      version = "0.1.13"
+    }
   }
 }
 

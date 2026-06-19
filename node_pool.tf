@@ -4,9 +4,6 @@ module "node_pool" {
   name                    = each.value.name
   role                    = each.value.role
   node_count              = each.value.node_count
-  cores                   = each.value.cores
-  memory                  = each.value.memory
-  disk_size               = each.value.disk_size
   subnet                  = each.value.subnet
   kubernetes_labels       = each.value.kubernetes_labels
   kubernetes_taints       = each.value.kubernetes_taints
@@ -15,9 +12,10 @@ module "node_pool" {
   datastore_id            = var.datastore_id
   attached                = each.value.attached
   ballooning              = each.value.ballooning
+  available_nodes         = each.value.available_nodes
   proxmox_config          = var.proxmox_config
-  waggle_slot_id          = each.value.waggle_slot_id
-  waggle_datacenter_id    = each.value.waggle_datacenter_id
+  waggle_datacenter_id    = var.waggle_datacenter_id
+  waggle_slot_name        = each.value.waggle_slot_name
 }
 
 resource "autoglue_cluster_node_pools" "autoglue_cluster_node_pools" {
