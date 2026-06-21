@@ -108,6 +108,9 @@ variable "node_pools" {
     node_count             = number
     role                   = string
     subnet                 = optional(string, "public")
+    cores                  = optional(number)
+    memory                 = optional(number)
+    disk_size              = optional(number)
     kubernetes_labels      = optional(map(string), {})
     kubernetes_annotations = optional(map(string), {})
     kubernetes_taints = list(object({
@@ -141,13 +144,16 @@ variable "node_pools" {
 
 
 variable "waggle_endpoint" {
-  type = string
+  type    = string
+  default = null
 }
 
 variable "waggle_api_key" {
-  type = string
+  type    = string
+  default = null
 }
 
 variable "waggle_datacenter_id" {
-  type = string
+  type    = string
+  default = null
 }

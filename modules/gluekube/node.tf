@@ -1,9 +1,13 @@
 data "waggle_slots" "available_slots" {
-  name = var.waggle_slot_name
+  count = var.waggle_slot_name != null ? 1 : 0
+  name  = var.waggle_slot_name
 }
 
 locals {
-  ram_gb = data.waggle_slots.available_slots.ram_gb * 1024
+  use_waggle = var.waggle_slot_name != null
+  cpu_cores  = local.use_waggle ? data.waggle_slots.available_slots[0].vcpu : var.cores
+  memory_mb  = local.use_waggle ? data.waggle_slots.available_slots[0].ram_gb * 1024 : var.memory
+  disk_gb    = local.use_waggle ? data.waggle_slots.available_slots[0].disk_gb : var.disk_size
 }
 
 resource "autoglue_ssh_key" "ssh_key" {
@@ -12,9 +16,10 @@ resource "autoglue_ssh_key" "ssh_key" {
 }
 
 module "waggle" {
+  count                = local.use_waggle ? 1 : 0
   source               = "../waggle"
   pool_name            = "${var.cluster_name}-${var.role}"
-  slot_id              = data.waggle_slots.available_slots.id
+  slot_id              = data.waggle_slots.available_slots[0].id
   desired_count        = var.node_count
   waggle_datacenter_id = var.waggle_datacenter_id
 }
@@ -29,7 +34,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
   for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
   content_type = "snippets"
   datastore_id = "local"
-  node_name    = length(var.available_nodes) > 0 ? random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)] : module.waggle.nodes_placement_targets[each.key].node
+  node_name    = length(var.available_nodes) > 0 ? random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)] : module.waggle[0].nodes_placement_targets[each.key].node
 
   source_raw {
     data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {
@@ -45,7 +50,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
 resource "proxmox_virtual_environment_vm" "cluster_node" {
   for_each  = toset([for i in range(0, var.node_count) : tostring(i)])
   name      = "${var.role}-${var.name}-${each.key}"
-  node_name = length(var.available_nodes) > 0 ? random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)] : module.waggle.nodes_placement_targets[each.key].node
+  node_name = length(var.available_nodes) > 0 ? random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)] : module.waggle[0].nodes_placement_targets[each.key].node
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
@@ -53,14 +58,14 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   bios    = "ovmf"
 
   cpu {
-    cores = data.waggle_slots.available_slots.vcpu
+    cores = local.cpu_cores
     type  = "x86-64-v2-AES"
     numa  = true
   }
 
   memory {
-    dedicated = data.waggle_slots.available_slots.ram_gb * 1024
-    floating  = var.ballooning ? data.waggle_slots.available_slots.ram_gb * 1024 / 2 : data.waggle_slots.available_slots.ram_gb * 1024
+    dedicated = local.memory_mb
+    floating  = var.ballooning ? local.memory_mb / 2 : local.memory_mb
   }
 
   disk {
@@ -69,7 +74,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
-    size         = data.waggle_slots.available_slots.disk_gb
+    size         = local.disk_gb
   }
 
   efi_disk {

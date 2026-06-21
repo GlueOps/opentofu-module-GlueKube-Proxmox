@@ -5,6 +5,9 @@ module "node_pool" {
   role                    = each.value.role
   node_count              = each.value.node_count
   subnet                  = each.value.subnet
+  cores                   = each.value.cores
+  memory                  = each.value.memory
+  disk_size               = each.value.disk_size
   kubernetes_labels       = each.value.kubernetes_labels
   kubernetes_taints       = each.value.kubernetes_taints
   kubernetes_annotations  = each.value.kubernetes_annotations
