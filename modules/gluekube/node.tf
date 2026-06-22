@@ -18,7 +18,7 @@ resource "autoglue_ssh_key" "ssh_key" {
 module "waggle" {
   count                = local.use_waggle ? 1 : 0
   source               = "../waggle"
-  pool_name            = "${var.cluster_name}-${var.role}"
+  pool_name            = "${var.cluster_name}-${var.name}-${var.role}"
   slot_id              = data.waggle_slots.available_slots[0].id
   desired_count        = var.node_count
   waggle_datacenter_id = var.waggle_datacenter_id
@@ -53,6 +53,8 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   node_name = length(var.available_nodes) > 0 ? random_shuffle.available_nodes.result[tonumber(each.key) % length(random_shuffle.available_nodes.result)] : module.waggle[0].nodes_placement_targets[each.key].node
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
+
+  vm_id = local.use_waggle ? module.waggle[0].nodes_placement_targets[each.key].vm_id : null
 
   machine = "q35"
   bios    = "ovmf"

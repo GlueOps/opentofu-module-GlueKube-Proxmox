@@ -2,7 +2,6 @@ resource "waggle_pools" "nodes" {
   name          = var.pool_name
   slot_id       = var.slot_id
   desired_count = var.desired_count
-  metadata      = jsonencode({ team = "platform", env = "prod" })
   datacenter_id = var.waggle_datacenter_id
 }
 

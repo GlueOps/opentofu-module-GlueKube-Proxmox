@@ -2,11 +2,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "0.103.0"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "4.1.0"
+      version = "0.110.0"
     }
     autoglue = {
       source  = "registry.terraform.io/GlueOps/autoglue"
