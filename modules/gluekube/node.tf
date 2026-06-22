@@ -54,7 +54,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
-  vm_id = local.use_waggle ? module.waggle[0].nodes_placement_targets[each.key].vm_id : null
+  vm_id = local.use_waggle ? module.waggle[0].nodes_placement_targets[each.key].vmid : null
 
   machine = "q35"
   bios    = "ovmf"
