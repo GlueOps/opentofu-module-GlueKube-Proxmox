@@ -42,7 +42,7 @@ node_pools = [
 module "captain" {
   source                     = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox.git"
   gluekube_docker_image      = "ghcr.io/glueops/gluekube"
-  gluekube_docker_tag        = "v1.34.5-gluekube.23"
+  gluekube_docker_tag        = "v1.34.5-gluekube.25"
   calico_network_calico_cidr = "172.16.0.0/16"
   network_service_cidr       = "192.168.0.0/16"
   provider_credentials       = var.provider_credentials
@@ -110,11 +110,14 @@ You can still use the module without Waggle by specifying `cores`, `memory`, and
 module "captain" {
   source                               = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox.git"
   gluekube_docker_image                = "ghcr.io/glueops/gluekube"
-  gluekube_docker_tag                  = "v1.34.5-gluekube.23"
+  gluekube_docker_tag                  = "v1.34.5-gluekube.25"
   calico_network_calico_cidr           = "172.16.0.0/16"
   calico_node_address_autodetection_v4 = "10.62.0.0/15"
   network_service_cidr                 = "192.168.0.0/16"
   provider_credentials                 = var.provider_credentials
+  waggle_endpoint                      = var.waggle_endpoint
+  waggle_api_key                       = var.waggle_api_key
+  waggle_datacenter_id                 = var.waggle_datacenter_id
   proxmox_config = {
     networks = {
       public = {
