@@ -12,6 +12,10 @@ terraform {
       source  = "registry.terraform.io/GlueOps/waggle"
       version = "0.1.13"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
