@@ -54,7 +54,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
-  vm_id = local.use_waggle ? module.waggle[0].nodes_placement_targets[each.key].vmid : null
+  # vm_id = local.use_waggle ? var.proxmox_config.networks.private.vlan_id * 500000 + each.key : null
 
   machine = "q35"
   bios    = "ovmf"
@@ -137,6 +137,11 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
 }
 
+resource "waggle_placements" "workers" {
+  for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
+  placement_id = module.waggle[0].nodes_placement_targets[each.key].placement
+  vmid         = proxmox_virtual_environment_vm.cluster_node[each.key].vm_id
+}
 
 resource "proxmox_virtual_environment_firewall_rules" "inbound" {
   for_each = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])

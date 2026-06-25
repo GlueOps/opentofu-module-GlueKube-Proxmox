@@ -2,8 +2,9 @@
 output "nodes_placement_targets" {
   value = [
     for p in data.waggle_pool_placements.nodes.placements : {
-      node = p.hypervisor_name
-      vmid = p.vmid
+      node      = p.hypervisor_name
+      vmid      = p.vmid
+      placement = p.id
     }
   ]
 }
