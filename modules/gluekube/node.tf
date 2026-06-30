@@ -68,7 +68,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
-  vm_id = local.use_waggle ? random_integer.vm_id[each.key].result: null
+  vm_id = local.use_waggle ? var.proxmox_config.networks.nat.vlan_id * 500000 + (parseint(substr(sha256(var.name), 0, 8), 16) % 10000) * 50 + each.key : null
 
   machine = "q35"
   bios    = "ovmf"
