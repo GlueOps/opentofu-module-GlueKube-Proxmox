@@ -88,16 +88,103 @@ module "captain" {
     }
   }
   node_pools = [
+node_pools = [
     {
-      "name"              : "master-node-pool",
-      "subnet"            : "private",
-      "node_count"        : 3,
-      "role"              : "master",
+      "name" : "master-node-pool",
+      "subnet" : "private",
+      "node_count" : 3,
+      "role" : "master",
       "kubernetes_labels" : {},
       "kubernetes_taints" : [],
-      "available_nodes"   : [],
-      "waggle_slot_name"  : "large",
+      "available_nodes" : [],
+      "waggle_slot_name" : "large"
     },
+    {
+      "role" : "worker",
+      "name" : "glueops-platform-node-pool",
+      "subnet" : "private",
+      "node_count" : 3,
+      "kubernetes_labels" : {
+        "glueops.dev/role" : "glueops-platform"
+      },
+      "kubernetes_taints" : [
+        {
+          key    = "glueops.dev/role"
+          value  = "glueops-platform"
+          effect = "NoSchedule"
+        }
+      ],
+      "available_nodes" : [],
+      "waggle_slot_name" : "large"
+    },
+    {
+      "role" : "worker",
+      "name" : "clusterwide",
+      "subnet" : "private",
+      "node_count" : 2,
+      "kubernetes_labels" : {
+        "glueops.dev/role" : "glueops-platform"
+      },
+      "kubernetes_taints" : [],
+      "available_nodes" : [],
+      "waggle_slot_name" : "large"
+    },
+
+    {
+      "role" : "worker",
+      "name" : "public-loadbalancer-node-pool",
+      "subnet" : "public",
+      "node_count" : 2,
+      "kubernetes_labels" : {
+        "use-as-loadbalancer" : "public-traefik",
+      },
+      "kubernetes_taints" : [
+        {
+          key    = "dedicated"
+          value  = "public-traefik"
+          effect = "NoSchedule"
+        }
+      ],
+      "available_nodes" : [],
+      "waggle_slot_name" : "large"
+    },
+    {
+      "role" : "worker",
+      "name" : "platform-loadbalancer-node-pool",
+      "subnet" : "public",
+      "node_count" : 2,
+      "kubernetes_labels" : {
+        "use-as-loadbalancer" : "platform-traefik",
+      },
+      "kubernetes_taints" : [
+        {
+          key    = "dedicated"
+          value  = "platform-traefik"
+          effect = "NoSchedule"
+        }
+      ],
+      "available_nodes" : [],
+      "waggle_slot_name" : "large"
+    },
+    {
+      "role" : "worker",
+      "name" : "nginx-loadbalancer-node-pool",
+      "subnet" : "public",
+      "node_count" : 2,
+      "kubernetes_labels" : {
+        "use-as-loadbalancer" : "public",
+      },
+      "kubernetes_taints" : [
+        {
+          key    = "dedicated"
+          value  = "public"
+          effect = "NoSchedule"
+        }
+      ],
+      "available_nodes" : [],
+      "waggle_slot_name" : "large"
+    },
+  ]
   ]
 }
 ```
