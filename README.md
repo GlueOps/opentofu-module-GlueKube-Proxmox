@@ -29,7 +29,7 @@ node_pools = [
     "role"              : "master",
     "kubernetes_labels" : {},
     "kubernetes_taints" : [],
-    "available_nodes"   : ["glueops-core-fs-hv01", "glueops-core-fs-hv02", "glueops-core-fs-hv03"]
+    "available_nodes"   : []
     "waggle_slot_name"  : "large",
   },
 ]
@@ -95,7 +95,7 @@ module "captain" {
       "role"              : "master",
       "kubernetes_labels" : {},
       "kubernetes_taints" : [],
-      "available_nodes"   : ["glueops-core-fs-hv01", "glueops-core-fs-hv02", "glueops-core-fs-hv03"]
+      "available_nodes"   : [],
       "waggle_slot_name"  : "large",
     },
   ]
