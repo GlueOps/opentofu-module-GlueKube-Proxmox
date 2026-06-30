@@ -43,6 +43,10 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
     })
     file_name = "${var.cluster_name}-${var.role}-${var.name}-${each.key}-cloud-init.yaml"
   }
+
+  lifecycle {
+    ignore_changes = [node_name]
+  }
 }
 
 
@@ -135,12 +139,19 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
   tags = [var.cluster_name, var.role, var.name]
 
+  lifecycle {
+    ignore_changes = [node_name]
+  }
 }
 
 resource "waggle_placements" "workers" {
-  for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
+  for_each     = local.use_waggle ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
   placement_id = module.waggle[0].nodes_placement_targets[each.key].placement
   vmid         = proxmox_virtual_environment_vm.cluster_node[each.key].vm_id
+
+  lifecycle {
+    ignore_changes = [placement_id]
+  }
 }
 
 resource "proxmox_virtual_environment_firewall_rules" "inbound" {
