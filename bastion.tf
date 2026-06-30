@@ -17,12 +17,24 @@ resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
   }
 }
 
+resource "random_integer" "vm_id" {
+  min      = 100
+  max      = 999999999
+  keepers = {
+    name = "${var.autoglue.autoglue_cluster_name}-bastion",
+    vlan_id = var.proxmox_config.networks.private.vlan_id
+  }
+}
+
 
 resource "proxmox_virtual_environment_vm" "bastion" {
   name      = "${var.autoglue.autoglue_cluster_name}-bastion"
   node_name = var.bastion.proxmox_node
 
   description = "GlueKube bastion"
+
+  vm_id = random_integer.vm_id.result
+
 
   machine       = "q35"
   bios          = "ovmf"
