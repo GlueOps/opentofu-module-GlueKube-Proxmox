@@ -18,10 +18,10 @@ resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
 }
 
 resource "random_integer" "vm_id" {
-  min      = 100
-  max      = 999999999
+  min = 100
+  max = 999999999
   keepers = {
-    name = "${var.autoglue.autoglue_cluster_name}-bastion",
+    name    = "${var.autoglue.autoglue_cluster_name}-bastion",
     vlan_id = var.proxmox_config.networks.private.vlan_id
   }
 }
@@ -36,8 +36,8 @@ resource "proxmox_virtual_environment_vm" "bastion" {
   vm_id = random_integer.vm_id.result
 
 
-  machine       = "q35"
-  bios          = "ovmf"
+  machine = "q35"
+  bios    = "ovmf"
 
   cpu {
     cores = var.bastion.cores
@@ -51,7 +51,7 @@ resource "proxmox_virtual_environment_vm" "bastion" {
 
   disk {
     datastore_id = var.datastore_id
-    import_from = "local:import/noble-server-cloudimg-amd64.qcow2"
+    import_from  = "local:import/noble-server-cloudimg-amd64.qcow2"
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
@@ -80,14 +80,14 @@ resource "proxmox_virtual_environment_vm" "bastion" {
   }
 
   network_device {
-    bridge = var.proxmox_config.networks.private.name
+    bridge  = var.proxmox_config.networks.private.name
     model   = "virtio"
     vlan_id = var.proxmox_config.networks.private.vlan_id
   }
 
   network_device {
     bridge = var.proxmox_config.networks.public.name
-    model   = "virtio"
+    model  = "virtio"
   }
 
   agent {
