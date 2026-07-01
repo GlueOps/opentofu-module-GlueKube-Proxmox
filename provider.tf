@@ -42,5 +42,5 @@ provider "aws" {
 
 provider "waggle" {
   endpoint = var.waggle_endpoint
-  token = var.waggle_api_key
+  token    = var.waggle_api_key
 }
