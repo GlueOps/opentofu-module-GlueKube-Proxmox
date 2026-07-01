@@ -6,12 +6,12 @@ variable "proxmox_config" {
         name = string
       })
       private = object({
-        name = string
+        name    = string
         vlan_id = optional(number)
 
       })
       nat = object({
-        name = string
+        name    = string
         vlan_id = optional(number)
       })
     })

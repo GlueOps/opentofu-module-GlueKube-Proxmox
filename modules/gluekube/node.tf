@@ -115,7 +115,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
 
 resource "proxmox_virtual_environment_firewall_rules" "inbound" {
-  for_each     = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
+  for_each = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
   depends_on = [
     proxmox_virtual_environment_vm.cluster_node,
   ]
