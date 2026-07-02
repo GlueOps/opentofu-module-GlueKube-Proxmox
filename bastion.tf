@@ -120,7 +120,7 @@ resource "proxmox_virtual_environment_vm" "bastion" {
 }
 
 
-resource "waggle_placements" "workers" {
+resource "waggle_placements" "bastion" {
   depends_on   = [
     proxmox_virtual_environment_vm.bastion,
   ]
