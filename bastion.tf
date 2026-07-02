@@ -120,6 +120,18 @@ resource "proxmox_virtual_environment_vm" "bastion" {
 }
 
 
+resource "waggle_placements" "workers" {
+  depends_on   = [
+    proxmox_virtual_environment_vm.bastion,
+  ]
+  placement_id = module.waggle.nodes_placement_targets[0].placement
+  vmid         = proxmox_virtual_environment_vm.bastion.vm_id
+
+  lifecycle {
+    ignore_changes = [placement_id]
+  }
+}
+
 
 resource "autoglue_server" "bastion" {
   depends_on         = [proxmox_virtual_environment_vm.bastion]

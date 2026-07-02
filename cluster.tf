@@ -32,7 +32,7 @@ resource "autoglue_cluster_control_plane_record_set" "ctrl_record" {
 }
 
 module "cluster_metadata" {
-  source = "git::https://github.com/GlueOps/opentofu-module-autoglue-metadata.git"
+  source = "git::https://github.com/GlueOps/opentofu-module-autoglue-metadata.git?ref=v0.0.1"
 
   cluster_id       = autoglue_cluster.cluster.id
   cluster_metadata = var.cluster_metadata
