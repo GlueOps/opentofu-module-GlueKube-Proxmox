@@ -1,3 +1,22 @@
+
+data "waggle_slots" "available_slots" {
+  name  = var.bastion.waggle_slot_name
+}
+
+locals {
+  cpu_cores  = data.waggle_slots.available_slots.vcpu
+  memory_mb  = data.waggle_slots.available_slots.ram_gb * 1024
+  disk_gb    = data.waggle_slots.available_slots.disk_gb
+}
+
+module "waggle" {
+  source               = "./modules/waggle"
+  pool_name            = "${var.autoglue.autoglue_cluster_name}-bastion"
+  slot_id              = data.waggle_slots.available_slots.id
+  desired_count        = 1
+  waggle_datacenter_id = var.waggle_datacenter_id
+}
+
 resource "autoglue_ssh_key" "bastion" {
   name    = "${var.autoglue.autoglue_cluster_name}-bastion"
   comment = "GlueKube bastion SSH Key"
@@ -6,7 +25,7 @@ resource "autoglue_ssh_key" "bastion" {
 resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
   content_type = "snippets"
   datastore_id = "local"
-  node_name    = var.bastion.proxmox_node
+  node_name    =  module.waggle.nodes_placement_targets[0].node
 
   source_raw {
     data = templatefile("${path.module}/cloudinit/cloud-init-bastion.yaml", {
@@ -29,7 +48,7 @@ resource "random_integer" "vm_id" {
 
 resource "proxmox_virtual_environment_vm" "bastion" {
   name      = "${var.autoglue.autoglue_cluster_name}-bastion"
-  node_name = var.bastion.proxmox_node
+  node_name = module.waggle.nodes_placement_targets[0].node
 
   description = "GlueKube bastion"
 
@@ -40,13 +59,13 @@ resource "proxmox_virtual_environment_vm" "bastion" {
   bios    = "ovmf"
 
   cpu {
-    cores = var.bastion.cores
+    cores = local.cpu_cores
     type  = "x86-64-v2-AES"
   }
 
   memory {
-    dedicated = var.bastion.memory
-    floating  = var.bastion.memory / 2
+    dedicated = local.memory_mb
+    floating  = local.memory_mb / 2
   }
 
   disk {
@@ -55,7 +74,7 @@ resource "proxmox_virtual_environment_vm" "bastion" {
     interface    = "virtio0"
     iothread     = true
     discard      = "on"
-    size         = var.bastion.disk_size
+    size         = local.disk_gb
   }
 
   efi_disk {
@@ -100,6 +119,18 @@ resource "proxmox_virtual_environment_vm" "bastion" {
   tags = [var.autoglue.autoglue_cluster_name, "bastion"]
 }
 
+
+resource "waggle_placements" "bastion" {
+  depends_on   = [
+    proxmox_virtual_environment_vm.bastion,
+  ]
+  placement_id = module.waggle.nodes_placement_targets[0].placement
+  vmid         = proxmox_virtual_environment_vm.bastion.vm_id
+
+  lifecycle {
+    ignore_changes = [placement_id]
+  }
+}
 
 
 resource "autoglue_server" "bastion" {

@@ -26,38 +26,11 @@ variable "datastore_id" {
   default     = "local"
 }
 
-variable "calico_network_calico_cidr" {
-  type = string
-  validation {
-    condition     = can(cidrnetmask(var.calico_network_calico_cidr))
-    error_message = "calico_network_calico_cidr must be a valid IPv4 CIDR block, for example: 172.16.0.0/16."
-  }
-}
-
-variable "network_service_cidr" {
-  type = string
-  validation {
-    condition     = can(cidrnetmask(var.network_service_cidr))
-    error_message = "network_service_cidr must be a valid IPv4 CIDR block for Kubernetes services, for example: 192.168.0.0/16."
-  }
-}
-
-variable "calico_node_address_autodetection_v4" {
-  type    = string
-  default = null
-  validation {
-    condition     = var.calico_node_address_autodetection_v4 == null || can(cidrnetmask(var.calico_node_address_autodetection_v4))
-    error_message = "calico_node_address_autodetection_v4 must be a valid IPv4 CIDR block, for example: 10.62.0.0/15."
-  }
-}
 
 variable "bastion" {
   description = "Bastion configuration."
   type = object({
-    cores        = number
-    memory       = number
-    disk_size    = number
-    proxmox_node = string
+    waggle_slot_name = string
   })
 }
 
@@ -142,6 +115,11 @@ variable "node_pools" {
 
 }
 
+variable "cluster_metadata" {
+  type        = map(string)
+  description = "Key-value pairs to store as cluster metadata"
+  default     = {}
+}
 
 variable "waggle_endpoint" {
   type    = string

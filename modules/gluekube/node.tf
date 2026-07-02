@@ -10,11 +10,6 @@ locals {
   disk_gb    = local.use_waggle ? data.waggle_slots.available_slots[0].disk_gb : var.disk_size
 }
 
-resource "autoglue_ssh_key" "ssh_key" {
-  name    = "${var.cluster_name}-${var.name}"
-  comment = "GlueKube ${var.role} SSH Key"
-}
-
 module "waggle" {
   count                = local.use_waggle ? 1 : 0
   source               = "../waggle"
@@ -22,6 +17,11 @@ module "waggle" {
   slot_id              = data.waggle_slots.available_slots[0].id
   desired_count        = var.node_count
   waggle_datacenter_id = var.waggle_datacenter_id
+}
+
+resource "autoglue_ssh_key" "ssh_key" {
+  name    = "${var.cluster_name}-${var.name}"
+  comment = "GlueKube ${var.role} SSH Key"
 }
 
 
