@@ -40,15 +40,19 @@ node_pools = [
 
 ```hcl
 module "captain" {
-  source                     = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox.git"
-  gluekube_docker_image      = "ghcr.io/glueops/gluekube"
-  gluekube_docker_tag        = "v1.34.5-gluekube.25"
-  calico_network_calico_cidr = "172.16.0.0/16"
-  network_service_cidr       = "192.168.0.0/16"
-  provider_credentials       = var.provider_credentials
-  waggle_endpoint            = var.waggle_endpoint
-  waggle_api_key             = var.waggle_api_key
-  waggle_datacenter_id       = var.waggle_datacenter_id
+  source                = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox.git?ref=v0.2.0"
+  gluekube_docker_image = "ghcr.io/glueops/gluekube"
+  gluekube_docker_tag   = "" # Ask Hamza
+
+  cluster_metadata = {
+    calico_network_calico_cidr           = "" # e.g. 172.16.0.0/16 
+    calico_node_address_autodetection_v4 = "" # e.g. 10.62.0.0/15
+    network_service_cidr                 = "" # e.g. 192.168.0.0/16
+  }
+  provider_credentials = var.provider_credentials
+  waggle_endpoint      = var.waggle_endpoint
+  waggle_api_key       = var.waggle_api_key
+  waggle_datacenter_id = var.waggle_datacenter_id
   proxmox_config = {
     networks = {
       public = {
@@ -56,19 +60,16 @@ module "captain" {
       }
       private = {
         name    = "vmbr_lan"
-        vlan_id = 101
+        vlan_id = null # Ask Alanis
       }
       nat = {
         name    = "vmbr_nat"
-        vlan_id = 201
+        vlan_id = null # Ask Alanis
       }
     }
   }
   bastion = {
-    disk_size    = 20
-    cores        = 4
-    memory       = 8192
-    proxmox_node = "glueops-core-fs-hv01"
+    waggle_slot_name = "large"
   }
   autoglue = {
     autoglue_cluster_name = var.autoglue_cluster_name
@@ -88,7 +89,6 @@ module "captain" {
     }
   }
   node_pools = [
-node_pools = [
     {
       "name" : "master-node-pool",
       "subnet" : "private",
@@ -122,9 +122,7 @@ node_pools = [
       "name" : "clusterwide",
       "subnet" : "private",
       "node_count" : 2,
-      "kubernetes_labels" : {
-        "glueops.dev/role" : "glueops-platform"
-      },
+      "kubernetes_labels" : {},
       "kubernetes_taints" : [],
       "available_nodes" : [],
       "waggle_slot_name" : "large"
@@ -184,7 +182,6 @@ node_pools = [
       "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
-  ]
   ]
 }
 ```
