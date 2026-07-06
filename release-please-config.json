@@ -19,7 +19,7 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "package-name": "terraform-module-cloud-aws-kubernetes-cluster"
+      "package-name": "opentofu-module-GlueKube-Proxmox"
     }
   }
 }
