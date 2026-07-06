@@ -85,7 +85,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   }
 
   disk {
-    datastore_id = var.datastore_id
+    datastore_id = "local"
     import_from  = "local:import/noble-server-cloudimg-amd64.qcow2"
     interface    = "virtio0"
     iothread     = true
@@ -100,7 +100,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   }
 
   initialization {
-    datastore_id = var.datastore_id
+    datastore_id = "local"
     ip_config {
       ipv4 {
         address = "dhcp"

@@ -12,7 +12,6 @@ module "node_pool" {
   kubernetes_taints      = each.value.kubernetes_taints
   kubernetes_annotations = each.value.kubernetes_annotations
   cluster_name           = var.autoglue.autoglue_cluster_name
-  datastore_id           = var.datastore_id
   attached               = each.value.attached
   ballooning             = each.value.ballooning
   available_nodes        = each.value.available_nodes

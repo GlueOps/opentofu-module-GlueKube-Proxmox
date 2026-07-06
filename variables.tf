@@ -20,12 +20,6 @@ variable "gluekube_docker_tag" {
   default = "v0.0.15-rc9"
 }
 
-variable "datastore_id" {
-  type        = string
-  description = "The Proxmox datastore ID for VM disks"
-  default     = "local"
-}
-
 
 variable "bastion" {
   description = "Bastion configuration."
