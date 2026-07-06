@@ -60,11 +60,11 @@ module "captain" {
       }
       private = {
         name    = "vmbr_lan"
-        vlan_id = null # See Customer Nrtworks Google Sheet
+        vlan_id = null # See Customer Networks Google Sheet
       }
       nat = {
         name    = "vmbr_nat"
-        vlan_id = null # See Customer Nrtworks Google Sheet
+        vlan_id = null # See Customer Networks Google Sheet
       }
     }
   }
