@@ -20,12 +20,6 @@ variable "gluekube_docker_tag" {
   default = "v0.0.15-rc9"
 }
 
-variable "datastore_id" {
-  type        = string
-  description = "The Proxmox datastore ID for VM disks"
-  default     = "local"
-}
-
 
 variable "bastion" {
   description = "Bastion configuration."
@@ -116,9 +110,20 @@ variable "node_pools" {
 }
 
 variable "cluster_metadata" {
-  type        = map(string)
-  description = "Key-value pairs to store as cluster metadata"
-  default     = {}
+  type = object({
+    calico_network_calico_cidr = string
+    network_service_cidr       = string
+    cloud                      = string
+    cloud_vars                 = optional(map(string), {}) # Holds the cloud-specific overrides
+  })
+  description = <<-EOT
+    Structured cluster metadata passed through to the autoglue-metadata module. All fields are required unless noted:
+      - calico_network_calico_cidr: CIDR block for the Calico pod network (e.g. "10.244.0.0/16").
+      - network_service_cidr:       CIDR block for Kubernetes services (e.g. "10.96.0.0/12").
+      - cloud:                      Target cloud provider. One of: "aws", "proxmox", "hetzner".
+      - cloud_vars:                 Optional map of cloud-specific overrides. When cloud is "proxmox",
+                                    "calico_node_address_autodetection_v4" is required.
+  EOT
 }
 
 variable "waggle_endpoint" {
