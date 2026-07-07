@@ -17,9 +17,12 @@ module "captain" {
   waggle_datacenter_id = var.waggle_datacenter_id
 
   cluster_metadata = {
-    calico_network_calico_cidr           = "172.16.0.0/16"
-    calico_node_address_autodetection_v4 = "10.62.0.0/15"
-    network_service_cidr                 = "192.168.0.0/16"
+    calico_network_calico_cidr = "172.16.0.0/16"
+    network_service_cidr       = "192.168.0.0/16"
+    cloud                      = "proxmox"
+    cloud_vars = {
+      calico_node_address_autodetection_v4 = "10.62.0.0/15"
+    }
   }
 
   proxmox_config = {
@@ -119,7 +122,7 @@ module "captain" {
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_cluster_metadata"></a> [cluster\_metadata](#module\_cluster\_metadata) | git::https://github.com/GlueOps/opentofu-module-autoglue-metadata.git | v0.0.1 |
+| <a name="module_cluster_metadata"></a> [cluster\_metadata](#module\_cluster\_metadata) | git::https://github.com/GlueOps/opentofu-module-autoglue-metadata.git | v0.0.2 |
 | <a name="module_node_pool"></a> [node\_pool](#module\_node\_pool) | ./modules/gluekube | n/a |
 | <a name="module_waggle"></a> [waggle](#module\_waggle) | ./modules/waggle | n/a |
 
@@ -148,7 +151,7 @@ module "captain" {
 |------|-------------|------|---------|:--------:|
 | <a name="input_autoglue"></a> [autoglue](#input\_autoglue) | Configuration for the AutoGlue platform integration, including cluster naming, credentials, and Route53 DNS settings. | <pre>object({<br/>    autoglue_cluster_name = string<br/><br/>    credentials = object({<br/>      autoglue_key        = string<br/>      autoglue_org_secret = string<br/>      base_url            = string<br/>    })<br/><br/>    route_53_config = object({<br/>      aws_access_key_id     = string<br/>      aws_secret_access_key = string<br/>      aws_region            = string<br/>      domain_name           = string<br/>      zone_id               = string<br/>      credential_id         = string<br/>    })<br/>  })</pre> | n/a | yes |
 | <a name="input_bastion"></a> [bastion](#input\_bastion) | Bastion configuration. | <pre>object({<br/>    waggle_slot_name = string<br/>  })</pre> | n/a | yes |
-| <a name="input_cluster_metadata"></a> [cluster\_metadata](#input\_cluster\_metadata) | Key-value pairs to store as cluster metadata | `map(string)` | `{}` | no |
+| <a name="input_cluster_metadata"></a> [cluster\_metadata](#input\_cluster\_metadata) | Structured cluster metadata passed through to the autoglue-metadata module. All fields are required unless noted:<br/>  - calico\_network\_calico\_cidr: CIDR block for the Calico pod network (e.g. "10.244.0.0/16").<br/>  - network\_service\_cidr:       CIDR block for Kubernetes services (e.g. "10.96.0.0/12").<br/>  - cloud:                      Target cloud provider. One of: "aws", "proxmox", "hetzner".<br/>  - cloud\_vars:                 Optional map of cloud-specific overrides. When cloud is "proxmox",<br/>                                "calico\_node\_address\_autodetection\_v4" is required. | <pre>object({<br/>    calico_network_calico_cidr = string<br/>    network_service_cidr       = string<br/>    cloud                      = string<br/>    cloud_vars                 = optional(map(string), {}) # Holds the cloud-specific overrides<br/>  })</pre> | n/a | yes |
 | <a name="input_gluekube_docker_image"></a> [gluekube\_docker\_image](#input\_gluekube\_docker\_image) | n/a | `string` | `"ghcr.io/glueops/gluekube"` | no |
 | <a name="input_gluekube_docker_tag"></a> [gluekube\_docker\_tag](#input\_gluekube\_docker\_tag) | n/a | `string` | `"v0.0.15-rc9"` | no |
 | <a name="input_node_pools"></a> [node\_pools](#input\_node\_pools) | n/a | <pre>list(object({<br/>    name                   = string<br/>    node_count             = number<br/>    role                   = string<br/>    subnet                 = optional(string, "public")<br/>    cores                  = optional(number)<br/>    memory                 = optional(number)<br/>    disk_size              = optional(number)<br/>    kubernetes_labels      = optional(map(string), {})<br/>    kubernetes_annotations = optional(map(string), {})<br/>    kubernetes_taints = list(object({<br/>      key    = string<br/>      value  = string<br/>      effect = string<br/>    }))<br/>    available_nodes  = list(string)<br/>    attached         = optional(bool, true)<br/>    ballooning       = optional(bool, true)<br/>    waggle_slot_name = optional(string)<br/><br/>  }))</pre> | n/a | yes |
