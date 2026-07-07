@@ -21,7 +21,9 @@
       "release-type": "simple",
       "package-name": "opentofu-module-GlueKube-Proxmox",
       "extra-files": [
-        { "type": "generic", "path": "docs/.header.md" }
+        { "type": "generic", "path": "docs/.header.md" },
+        { "type": "generic", "path": "README.md" }
+      
       ]
     }
   }
