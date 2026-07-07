@@ -21,7 +21,7 @@ module "captain" {
     network_service_cidr       = "192.168.0.0/16"
     cloud                      = "proxmox"
     cloud_vars = {
-      calico_node_address_autodetection_v4 = "cidr=10.62.0.0/15"
+      calico_node_address_autodetection_v4 = "10.62.0.0/15"
     }
   }
 
@@ -65,7 +65,7 @@ module "captain" {
   }
 
   node_pools = [
-    {
+{
       "name" : "master-node-pool",
       "subnet" : "private",
       "node_count" : 3,
