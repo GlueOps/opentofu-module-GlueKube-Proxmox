@@ -24,7 +24,11 @@ variable "gluekube_docker_tag" {
 variable "bastion" {
   description = "Bastion configuration."
   type = object({
-    waggle_slot_name = string
+    cores            = optional(number)
+    memory           = optional(number)
+    disk_size        = optional(number)
+    proxmox_node     = optional(string)
+    waggle_slot_name = optional(string)
   })
 }
 

@@ -30,16 +30,6 @@ resource "random_shuffle" "available_nodes" {
   result_count = length(var.available_nodes)
 }
 
-resource "random_integer" "vm_id" {
-  for_each = toset([for i in range(0, var.node_count) : tostring(i)])
-  min      = 100
-  max      = 999999999
-  keepers = {
-    name = "${var.cluster_name}-${var.name}-${var.role}-${each.key}",
-    vlan_id = var.subnet == "public" ? var.proxmox_config.networks.private.vlan_id : var.proxmox_config.networks.nat.vlan_id
-  }
-}
-
 resource "proxmox_virtual_environment_file" "node_cloud_init" {
   for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
   content_type = "snippets"
