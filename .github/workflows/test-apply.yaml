@@ -1,0 +1,92 @@
+name: test-apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      action_make_target:
+        description: "AutoGlue action make_target to run after apply (the k8s setup target)"
+        type: string
+        required: true
+      gluekube_docker_tag:
+        description: "GlueKube docker tag to test (defaults to examples/test/variables.tf)"
+        type: string
+        required: false
+      destroy:
+        description: "Run tofu destroy after apply"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  test-apply:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/test
+    env:
+      # provider_credentials is an object variable, so TF_VAR_ carries the JSON object
+      # verbatim (tofu parses TF_VAR_ for complex types as an HCL expression). The secret
+      # holds the whole object, so optional attributes it omits keep their type defaults.
+      TF_VAR_provider_credentials: ${{ secrets.PROXMOX_PROVIDER_CREDENTIALS }}
+      # Waggle: endpoint/api_key configure the waggle provider, datacenter_id is passed
+      # through to the node pools and bastion. All three are required in practice here,
+      # since every node pool in main.tf sets waggle_slot_name.
+      TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+      TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+      TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+      # TF_VAR_gluekube_docker_tag is not set here: an empty TF_VAR_* overrides the
+      # variables.tf default with "" rather than falling back to it. The step below
+      # exports it only when the input is actually provided.
+      # AutoGlue integration
+      TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+      TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+      TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+      TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+      # Route53 config
+      TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+      TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+      TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+      TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+      TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+
+      # Only override the tag when the dispatch input is non-empty, so a blank input
+      # keeps the default from examples/test/variables.tf. Applies to apply + destroy.
+      - name: Set GlueKube docker tag
+        if: ${{ inputs.gluekube_docker_tag != '' }}
+        env:
+          TAG: ${{ inputs.gluekube_docker_tag }}
+        run: echo "TF_VAR_gluekube_docker_tag=${TAG}" >> "$GITHUB_ENV"
+
+      - name: Tofu init
+        run: tofu init
+
+      - name: Tofu apply
+        run: tofu apply -auto-approve
+
+      - name: Invoke AutoGlue kubernetes setup
+        env:
+          BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
+          API_KEY: ${{ secrets.AUTOGLUE_API_KEY }}
+          ORG_NAME: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          CLUSTER_NAME: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          ACTION_MAKE_TARGET: ${{ inputs.action_make_target }}
+        run: bash invoke_autoglue.sh
+
+      - name: Check cluster health
+        env:
+          BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
+          API_KEY: ${{ secrets.AUTOGLUE_API_KEY }}
+          ORG_NAME: ${{ secrets.AUTOGLUE_ORG_NAME }}
+        run: bash check_cluster_health.sh
+
+      - name: Tofu destroy
+        if: ${{ always() && inputs.destroy }}
+        run: tofu destroy -auto-approve
