@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@v1
+        uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # v2
 
       # Only override the tag when the dispatch input is non-empty, so a blank input
       # keeps the default from examples/test/variables.tf. Applies to apply + destroy.
