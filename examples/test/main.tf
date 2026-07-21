@@ -83,6 +83,7 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
+      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
