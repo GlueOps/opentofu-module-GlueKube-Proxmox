@@ -6,7 +6,7 @@ This opentofu module deploys a Kubernetes cluster on Proxmox VE using GlueKube.
 ```hcl
 
 module "captain" {
-  source                = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox?ref=v0.2.1" # x-release-please-version
+  source                = "git::https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox?ref=v0.3.0" # x-release-please-version
   gluekube_docker_image = "ghcr.io/glueops/gluekube"
   gluekube_docker_tag   = "v1.34.5-gluekube.27"
 
@@ -176,7 +176,6 @@ module "captain" {
 |------|---------|
 | <a name="provider_autoglue"></a> [autoglue](#provider\_autoglue) | 0.10.12 |
 | <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.110.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | n/a |
 | <a name="provider_waggle"></a> [waggle](#provider\_waggle) | 0.1.20 |
 
 ## Modules
@@ -202,7 +201,6 @@ module "captain" {
 | autoglue_ssh_key.bastion | resource |
 | [proxmox_virtual_environment_file.bastion_cloud_init](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/virtual_environment_file) | resource |
 | [proxmox_virtual_environment_vm.bastion](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/virtual_environment_vm) | resource |
-| [random_integer.vm_id](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/integer) | resource |
 | waggle_placements.bastion | resource |
 | waggle_slots.available_slots | data source |
 
@@ -211,7 +209,7 @@ module "captain" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_autoglue"></a> [autoglue](#input\_autoglue) | Configuration for the AutoGlue platform integration, including cluster naming, credentials, and Route53 DNS settings. | <pre>object({<br/>    autoglue_cluster_name = string<br/><br/>    credentials = object({<br/>      autoglue_key        = string<br/>      autoglue_org_secret = string<br/>      base_url            = string<br/>    })<br/><br/>    route_53_config = object({<br/>      aws_access_key_id     = string<br/>      aws_secret_access_key = string<br/>      aws_region            = string<br/>      domain_name           = string<br/>      zone_id               = string<br/>      credential_id         = string<br/>    })<br/>  })</pre> | n/a | yes |
-| <a name="input_bastion"></a> [bastion](#input\_bastion) | Bastion configuration. | <pre>object({<br/>    waggle_slot_name = string<br/>  })</pre> | n/a | yes |
+| <a name="input_bastion"></a> [bastion](#input\_bastion) | Bastion configuration. | <pre>object({<br/>    cores            = optional(number)<br/>    memory           = optional(number)<br/>    disk_size        = optional(number)<br/>    proxmox_node     = optional(string)<br/>    waggle_slot_name = optional(string)<br/>  })</pre> | n/a | yes |
 | <a name="input_cluster_metadata"></a> [cluster\_metadata](#input\_cluster\_metadata) | Structured cluster metadata passed through to the autoglue-metadata module. All fields are required unless noted:<br/>  - calico\_network\_calico\_cidr: CIDR block for the Calico pod network (e.g. "10.244.0.0/16").<br/>  - network\_service\_cidr:       CIDR block for Kubernetes services (e.g. "10.96.0.0/12").<br/>  - cloud:                      Target cloud provider. One of: "aws", "proxmox", "hetzner".<br/>  - cloud\_vars:                 Optional map of cloud-specific overrides. When cloud is "proxmox",<br/>                                "calico\_node\_address\_autodetection\_v4" is required. | <pre>object({<br/>    calico_network_calico_cidr = string<br/>    network_service_cidr       = string<br/>    cloud                      = string<br/>    cloud_vars                 = optional(map(string), {}) # Holds the cloud-specific overrides<br/>  })</pre> | n/a | yes |
 | <a name="input_gluekube_docker_image"></a> [gluekube\_docker\_image](#input\_gluekube\_docker\_image) | n/a | `string` | `"ghcr.io/glueops/gluekube"` | no |
 | <a name="input_gluekube_docker_tag"></a> [gluekube\_docker\_tag](#input\_gluekube\_docker\_tag) | n/a | `string` | `"v0.0.15-rc9"` | no |
