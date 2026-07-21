@@ -29,7 +29,7 @@ jobs:
       # provider_credentials is an object variable, so TF_VAR_ carries the JSON object
       # verbatim (tofu parses TF_VAR_ for complex types as an HCL expression). The secret
       # holds the whole object, so optional attributes it omits keep their type defaults.
-      TF_VAR_provider_credentials: ${{ secrets.PROXMOX_PROVIDER_CREDENTIALS }}
+      TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
       # Waggle: endpoint/api_key configure the waggle provider, datacenter_id is passed
       # through to the node pools and bastion. All three are required in practice here,
       # since every node pool in main.tf sets waggle_slot_name.
