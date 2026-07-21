@@ -39,21 +39,21 @@ module "captain" {
   }
 
   autoglue = {
-    autoglue_cluster_name = var.autoglue.autoglue_cluster_name
+    autoglue_cluster_name = var.autoglue_cluster_name
 
     credentials = {
-      autoglue_key        = var.autoglue.autoglue_key
-      autoglue_org_secret = var.autoglue.autoglue_org_secret
-      base_url            = var.autoglue.autoglue_base_url
+      autoglue_key        = var.autoglue_key
+      autoglue_org_secret = var.autoglue_org_secret
+      base_url            = var.autoglue_base_url
     }
 
     route_53_config = {
-      aws_access_key_id     = var.autoglue.aws_access_key_id
-      aws_secret_access_key = var.autoglue.aws_secret_access_key
-      aws_region            = var.autoglue.route53_region
-      domain_name           = var.autoglue.domain_name
-      zone_id               = var.autoglue.route53_zone_id
-      credential_id         = var.autoglue.autoglue_credentials_id
+      aws_access_key_id     = var.route53_aws_access_key_id
+      aws_secret_access_key = var.route53_aws_secret_access_key
+      aws_region            = var.route53_region
+      domain_name           = var.domain_name
+      zone_id               = var.route53_zone_id
+      credential_id         = var.autoglue_credential_id
     }
   }
 

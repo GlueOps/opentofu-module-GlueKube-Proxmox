@@ -32,26 +32,65 @@ variable "bastion" {
   })
 }
 
-variable "autoglue" {
-  description = "Configuration for the AutoGlue platform integration, including cluster naming, credentials, and Route53 DNS settings."
-  type = object({
-    autoglue_cluster_name = string
+################################
+# AutoGlue integration
+################################
+variable "autoglue_cluster_name" {
+  type        = string
+  description = "Cluster name to register in AutoGlue."
+}
 
-    credentials = object({
-      autoglue_key        = string
-      autoglue_org_secret = string
-      base_url            = string
-    })
+variable "autoglue_key" {
+  type        = string
+  description = "AutoGlue org key."
+  sensitive   = true
+}
 
-    route_53_config = object({
-      aws_access_key_id     = string
-      aws_secret_access_key = string
-      aws_region            = string
-      domain_name           = string
-      zone_id               = string
-      credential_id         = string
-    })
-  })
+variable "autoglue_org_secret" {
+  type        = string
+  description = "AutoGlue org secret."
+  sensitive   = true
+}
+
+variable "autoglue_base_url" {
+  type        = string
+  description = "Base URL of the AutoGlue API."
+}
+
+################################
+# Route53 config (AutoGlue captain domain)
+################################
+variable "route53_aws_access_key_id" {
+  type        = string
+  description = "AWS access key id used by AutoGlue for Route53 management."
+  sensitive   = true
+}
+
+variable "route53_aws_secret_access_key" {
+  type        = string
+  description = "AWS secret access key used by AutoGlue for Route53 management."
+  sensitive   = true
+}
+
+variable "route53_region" {
+  type        = string
+  description = "AWS region for the Route53 provider."
+  default     = "us-west-2"
+}
+
+variable "domain_name" {
+  type        = string
+  description = "Domain name for the captain domain."
+}
+
+variable "route53_zone_id" {
+  type        = string
+  description = "Route53 hosted zone id for the domain."
+}
+
+variable "autoglue_credential_id" {
+  type        = string
+  description = "AutoGlue credential id referencing the Route53 credentials."
 }
 
 variable "proxmox_config" {
