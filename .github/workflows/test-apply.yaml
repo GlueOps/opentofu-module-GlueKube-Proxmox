@@ -52,7 +52,7 @@ jobs:
       TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v1
