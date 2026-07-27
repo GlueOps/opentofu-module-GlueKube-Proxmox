@@ -28,7 +28,13 @@ write_files:
       eth1
     path: /etc/glueops/public-interface
     permissions: "0644"
+  
+  - content: |
+      APT::Periodic::Update-Package-Lists "0";
+      APT::Periodic::Download-Upgradeable-Packages "0";
+      APT::Periodic::AutocleanInterval "0";
+      APT::Periodic::Unattended-Upgrade "0";
+    path: /etc/apt/apt.conf.d/20auto-upgrades
 runcmd:
   - sudo sysctl --system
   - sudo systemctl enable --now qemu-guest-agent
-  - sudo systemctl disable --now unattended-upgrades.service apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt      

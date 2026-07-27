@@ -19,6 +19,12 @@ on:
 permissions:
   contents: read
 
+# Serialize runs against the shared S3 state. Queue rather than cancel: cancelling a
+# run mid-apply/destroy would leave the state lock held, needing a manual force-unlock.
+concurrency:
+  group: test-apply-state
+  cancel-in-progress: false
+
 jobs:
   test-apply:
     runs-on: ubuntu-latest
@@ -26,6 +32,11 @@ jobs:
       run:
         working-directory: examples/test
     env:
+      # S3 backend credentials, scoped to the state bucket. These are consumed by the
+      # backend for every state operation (init/apply/destroy). The aws provider in
+      # provider.tf sets access_key/secret_key explicitly, so it is unaffected by these.
+      AWS_ACCESS_KEY_ID: ${{ secrets.BACKEND_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKEND_AWS_SECRET_ACCESS_KEY }}
       # provider_credentials is an object variable, so TF_VAR_ carries the JSON object
       # verbatim (tofu parses TF_VAR_ for complex types as an HCL expression). The secret
       # holds the whole object, so optional attributes it omits keep their type defaults.
@@ -65,8 +76,23 @@ jobs:
           TAG: ${{ inputs.gluekube_docker_tag }}
         run: echo "TF_VAR_gluekube_docker_tag=${TAG}" >> "$GITHUB_ENV"
 
+      # State persists in S3 across runs, so a failed apply or failed destroy can be
+      # re-run against the same state. Bucket/region are non-sensitive repo variables;
+      # key is fixed so every run of this example targets the same state object.
       - name: Tofu init
-        run: tofu init
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          STATE_REGION: ${{ vars.TF_STATE_REGION }}
+        run: |
+          set -euo pipefail
+          if [ -z "${STATE_BUCKET}" ] || [ -z "${STATE_REGION}" ]; then
+            echo "::error::TF_STATE_BUCKET and TF_STATE_REGION repo variables must be set" >&2
+            exit 1
+          fi
+          tofu init \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="region=${STATE_REGION}" \
+            -backend-config="key=gluekube-proxmox/examples-test/terraform.tfstate"
 
       - name: Tofu apply
         run: tofu apply -auto-approve
