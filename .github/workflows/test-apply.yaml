@@ -90,8 +90,10 @@ jobs:
           args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}  --accept-dns=false"
           tags: tag:github-actions
       
-      - name: Verify HTTP traffic is routed through exit node
+      - name: Verify
         run: |
+          tailscale status
+          tailscale ping ${{ secrets.TAILSCALE_EXIT_NODE }}
           curl -s https://ifconfig.me
 
       # State persists in S3 across runs, so a failed apply or failed destroy can be
