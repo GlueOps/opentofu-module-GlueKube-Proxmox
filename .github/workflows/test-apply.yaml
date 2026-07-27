@@ -3,10 +3,17 @@ name: test-apply
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "apply = full apply flow; destroy-only = skip apply and just destroy the existing S3 state"
+        type: choice
+        options:
+          - apply
+          - destroy-only
+        default: apply
       action_make_target:
-        description: "AutoGlue action make_target to run after apply (the k8s setup target)"
+        description: "AutoGlue action make_target to run after apply (required for mode=apply; ignored for destroy-only)"
         type: string
-        required: true
+        required: false
       gluekube_docker_tag:
         description: "GlueKube docker tag to test (defaults to examples/test/variables.tf)"
         type: string
@@ -80,6 +87,7 @@ jobs:
       # re-run against the same state. Bucket/region are non-sensitive repo variables;
       # key is fixed so every run of this example targets the same state object.
       - name: Tofu init
+        id: init
         env:
           STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
           STATE_REGION: ${{ vars.TF_STATE_REGION }}
@@ -94,10 +102,14 @@ jobs:
             -backend-config="region=${STATE_REGION}" \
             -backend-config="key=gluekube-proxmox/examples-test/terraform.tfstate"
 
+      # Apply-path steps are skipped entirely for mode=destroy-only. The implicit
+      # success() gate on each `if` still short-circuits them on an earlier failure.
       - name: Tofu apply
+        if: ${{ inputs.mode == 'apply' }}
         run: tofu apply -auto-approve
 
       - name: Invoke AutoGlue kubernetes setup
+        if: ${{ inputs.mode == 'apply' }}
         env:
           BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
           API_KEY: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -107,12 +119,16 @@ jobs:
         run: bash invoke_autoglue.sh
 
       - name: Check cluster health
+        if: ${{ inputs.mode == 'apply' }}
         env:
           BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
           API_KEY: ${{ secrets.AUTOGLUE_API_KEY }}
           ORG_NAME: ${{ secrets.AUTOGLUE_ORG_NAME }}
         run: bash check_cluster_health.sh
 
+      # Runs for destroy-only always, and for mode=apply when the destroy input is set.
+      # always() so a failed apply still gets torn down. init must have succeeded, else
+      # there is no backend to destroy against.
       - name: Tofu destroy
-        if: ${{ always() && inputs.destroy }}
+        if: ${{ always() && steps.init.outcome == 'success' && (inputs.mode == 'destroy-only' || inputs.destroy) }}
         run: tofu destroy -auto-approve
