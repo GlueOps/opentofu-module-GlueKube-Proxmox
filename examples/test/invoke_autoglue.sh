@@ -98,7 +98,7 @@ else
     -H "content-type: application/json" \
     -H "X-API-KEY: ${API_KEY}" \
     -H "x-org-id: ${ORG_ID}" \
-    --data-raw '{"status":"pending"}' | jq .
+    --data-raw '{"status":"pending"}' > /dev/null
 fi
 
 sleep 300

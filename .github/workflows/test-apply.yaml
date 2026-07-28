@@ -54,9 +54,6 @@ jobs:
       TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
       TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
       TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
-      # TF_VAR_gluekube_docker_tag is not set here: an empty TF_VAR_* overrides the
-      # variables.tf default with "" rather than falling back to it. The step below
-      # exports it only when the input is actually provided.
       # AutoGlue integration
       TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
       TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
@@ -75,12 +72,11 @@ jobs:
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v1
 
-     
-      
-      - name: Show IP before Tailscale
-        run: |
-          echo "IP from ifconfig.me:"
-          curl -s https://ifconfig.me
+      - name: Set GlueKube docker tag
+        if: ${{ inputs.gluekube_docker_tag != '' }}
+        env:
+          TAG: ${{ inputs.gluekube_docker_tag }}
+        run: echo "TF_VAR_gluekube_docker_tag=${TAG}" >> "$GITHUB_ENV"
 
       - name: Setup Tailscale
         uses: tailscale/github-action@v4
@@ -90,12 +86,6 @@ jobs:
           args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}  --accept-dns=false"
           tags: tag:github-actions
       
-      - name: Verify
-        run: |
-          tailscale status
-          tailscale ping ${{ secrets.TAILSCALE_EXIT_NODE }}
-          curl -s https://ifconfig.me
-
       # State persists in S3 across runs, so a failed apply or failed destroy can be
       # re-run against the same state. Bucket/region are non-sensitive repo variables;
       # key is fixed so every run of this example targets the same state object.
