@@ -140,6 +140,7 @@ jobs:
       # always() so a failed apply still gets torn down. init must have succeeded, else
       # there is no backend to destroy against.
       - name: Tofu destroy
+        continue-on-error: true
         if: ${{ always() && steps.init.outcome == 'success' && (inputs.mode == 'destroy-only' || inputs.destroy) }}
         run: tofu destroy -auto-approve
 
