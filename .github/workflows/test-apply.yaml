@@ -159,17 +159,14 @@ jobs:
 
       # Backstop cleanup: force-delete any Proxmox VMs tagged with the cluster name and
       # any leftover cloud-init snippets. Same gate/always() rationale as the AutoGlue nuke.
-      # Creds are extracted from the PROVIDER_CREDENTIALS JSON (the single source of Proxmox
-      # creds in this workflow); reaches Proxmox over the Tailscale exit node set up above.
+      # The whole provider_credentials object (JSON or HCL) is passed through; the script
+      # extracts endpoint/api_token/insecure itself. Reaches Proxmox over the Tailscale
+      # exit node set up above.
       - name: Nuke Proxmox resources
         if: ${{ always() && steps.init.outcome == 'success' && (inputs.mode == 'destroy-only' || inputs.destroy) }}
         env:
-          PROVIDER_CREDENTIALS: ${{ secrets.PROVIDER_CREDENTIALS }}
+          PROXMOX_PROVIDER_CREDENTIALS: ${{ secrets.PROVIDER_CREDENTIALS }}
           PROXMOX_CLUSTER_NAME: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
         run: |
-          set -euo pipefail
-          export PROXMOX_ENDPOINT="$(jq -r '.endpoint'          <<<"$PROVIDER_CREDENTIALS")"
-          export PROXMOX_API_TOKEN="$(jq -r '.api_token'        <<<"$PROVIDER_CREDENTIALS")"
-          export PROXMOX_INSECURE="$(jq -r '.insecure // false' <<<"$PROVIDER_CREDENTIALS")"
           python -m pip install --quiet requests
           python proxmox_nuke.py

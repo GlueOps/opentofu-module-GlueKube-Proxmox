@@ -31,12 +31,20 @@ Usage:
 
   # dry-run (list only, don't delete)
   python proxmox_nuke.py --dry-run
+
+  # in CI, pass the whole provider_credentials object (JSON or HCL) instead of the
+  # individual endpoint/token/insecure vars:
+  export PROXMOX_PROVIDER_CREDENTIALS="$PROVIDER_CREDENTIALS"
+  export PROXMOX_CLUSTER_NAME=dev.example.rocks
+  python proxmox_nuke.py
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import re
 import sys
 import time
 import urllib.parse
@@ -158,6 +166,31 @@ def _vm_matches(vm: dict, cluster: str) -> bool:
     """
     tags = (vm.get("tags") or "").split(";")
     return cluster in tags
+
+
+def parse_provider_credentials(raw: str) -> dict[str, str]:
+    """Extract the scalar fields we need from a provider_credentials blob.
+
+    The blob is the whole `provider_credentials` object as stored in the
+    PROVIDER_CREDENTIALS secret. It may be JSON (`"endpoint": "..."`) or the HCL
+    object form used in .tfvars (`endpoint = "..."`) — both are valid values for
+    TF_VAR_provider_credentials, so we accept either. Only endpoint / api_token /
+    insecure are read; the multi-line private_key (unused for API access) is ignored.
+    """
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return {k: str(v) for k, v in data.items()}
+    except (ValueError, TypeError):
+        pass
+
+    # HCL / tfvars fallback: match `key = "value"` or `key: value` on scalar lines.
+    out: dict[str, str] = {}
+    for field in ("endpoint", "api_token", "insecure"):
+        m = re.search(rf'^\s*{field}\s*[:=]\s*"?([^"\n]+?)"?\s*$', raw, re.MULTILINE)
+        if m:
+            out[field] = m.group(1).strip()
+    return out
 
 
 def _snippet_matches(volid: str, cluster: str) -> bool:
@@ -326,6 +359,15 @@ def main(argv: list[str] | None = None) -> int:
     api_token = args.api_token    or os.environ.get("PROXMOX_API_TOKEN", "")
     cluster   = args.cluster_name or os.environ.get("PROXMOX_CLUSTER_NAME", "")
     insecure  = args.insecure     or _env_truthy(os.environ.get("PROXMOX_INSECURE", ""))
+
+    # Convenience for CI: rather than plumb three separate secrets, accept the whole
+    # provider_credentials object (JSON or HCL) and fill in anything not set above.
+    raw_creds = os.environ.get("PROXMOX_PROVIDER_CREDENTIALS", "")
+    if raw_creds:
+        creds = parse_provider_credentials(raw_creds)
+        endpoint  = endpoint  or creds.get("endpoint", "")
+        api_token = api_token or creds.get("api_token", "")
+        insecure  = insecure  or _env_truthy(creds.get("insecure", ""))
 
     missing = []
     if not endpoint:
