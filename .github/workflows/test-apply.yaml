@@ -72,6 +72,13 @@ jobs:
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v1
 
+      # Needed by autoglue_nuke.py (the post-destroy cleanup step). setup-python gives a
+      # pip that is not externally-managed, so `pip install requests` works cleanly.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Set GlueKube docker tag
         if: ${{ inputs.gluekube_docker_tag != '' }}
         env:
@@ -135,3 +142,16 @@ jobs:
       - name: Tofu destroy
         if: ${{ always() && steps.init.outcome == 'success' && (inputs.mode == 'destroy-only' || inputs.destroy) }}
         run: tofu destroy -auto-approve
+
+      # Backstop cleanup: delete any AutoGlue org resources left behind after destroy.
+      # Runs on the same condition as destroy, and with always() so leftovers are still
+      # cleaned even if the destroy above failed partway.
+      - name: Nuke AutoGlue org
+        if: ${{ always() && steps.init.outcome == 'success' && (inputs.mode == 'destroy-only' || inputs.destroy) }}
+        env:
+          AUTOGLUE_BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
+          AUTOGLUE_ORG_KEY: ${{ secrets.AUTOGLUE_KEY }}
+          AUTOGLUE_ORG_SECRET: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+        run: |
+          python -m pip install --quiet requests
+          python autoglue_nuke.py
