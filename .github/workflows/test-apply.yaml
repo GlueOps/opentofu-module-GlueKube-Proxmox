@@ -1,6 +1,9 @@
 name: test-apply
 
 on:
+  schedule:
+    # 06:00 UTC daily. Scheduled runs only fire from the default branch.
+    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -14,6 +17,7 @@ on:
         description: "AutoGlue action make_target to run after apply (required for mode=apply; ignored for destroy-only)"
         type: string
         required: false
+        default: "setup"
       gluekube_docker_tag:
         description: "GlueKube docker tag to test (defaults to examples/test/variables.tf)"
         type: string
