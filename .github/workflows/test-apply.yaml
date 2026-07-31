@@ -19,6 +19,13 @@ on:
 permissions:
   contents: read
 
+# Serialize runs: they share one Proxmox cluster and one AutoGlue org (same cluster-name
+# secret), and the pre-run nukes delete by that name. Two overlapping runs would tear down
+# each other's VMs mid-apply. Queue rather than cancel, so a run is never killed between
+# apply and teardown.
+concurrency:
+  group: test-apply
+  cancel-in-progress: false
 
 jobs:
   test-apply:
@@ -75,10 +82,9 @@ jobs:
           args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}  --accept-dns=false"
           tags: tag:github-actions
       
-      # Backstop cleanup: delete any AutoGlue org resources left behind after destroy.
-      # always() so leftovers are still cleaned even if apply or destroy failed partway.
-      - name: Nuke AutoGlue org
+      - name: Pre-Nuke AutoGlue org
         if: ${{ always() }}
+        continue-on-error: true
         env:
           AUTOGLUE_BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
           AUTOGLUE_ORG_KEY: ${{ secrets.AUTOGLUE_KEY }}
@@ -87,13 +93,9 @@ jobs:
           python -m pip install --quiet requests
           python autoglue_nuke.py
 
-      # Backstop cleanup: force-delete any Proxmox VMs tagged with the cluster name and
-      # any leftover cloud-init snippets. Same always() rationale as the AutoGlue nuke.
-      # The whole provider_credentials object (JSON or HCL) is passed through; the script
-      # extracts endpoint/api_token/insecure itself. Reaches Proxmox over the Tailscale
-      # exit node set up above.
-      - name: Nuke Proxmox resources
+      - name: Pre-Nuke Proxmox resources
         if: ${{ always() }}
+        continue-on-error: true
         env:
           PROXMOX_PROVIDER_CREDENTIALS: ${{ secrets.PROVIDER_CREDENTIALS }}
           PROXMOX_CLUSTER_NAME: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
