@@ -2,19 +2,12 @@ name: test-apply
 
 on:
   schedule:
-    # 06:00 UTC daily. Scheduled runs only fire from the default branch.
+    # 02:00 UTC daily. Scheduled runs only fire from the default branch.
     - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
-      mode:
-        description: "apply = full apply flow; destroy-only = skip apply and just destroy the existing S3 state"
-        type: choice
-        options:
-          - apply
-          - destroy-only
-        default: apply
       action_make_target:
-        description: "AutoGlue action make_target to run after apply (required for mode=apply; ignored for destroy-only)"
+        description: "AutoGlue action make_target to run after apply"
         type: string
         required: false
         default: "setup"
@@ -22,19 +15,10 @@ on:
         description: "GlueKube docker tag to test (defaults to examples/test/variables.tf)"
         type: string
         required: false
-      destroy:
-        description: "Run tofu destroy after apply"
-        type: boolean
-        default: true
 
 permissions:
   contents: read
 
-# Serialize runs against the shared S3 state. Queue rather than cancel: cancelling a
-# run mid-apply/destroy would leave the state lock held, needing a manual force-unlock.
-concurrency:
-  group: test-apply-state
-  cancel-in-progress: false
 
 jobs:
   test-apply:
@@ -43,12 +27,6 @@ jobs:
       run:
         working-directory: examples/test
     env:
-      # S3 backend credentials, scoped to the state bucket. These are consumed by the
-      # backend for every state operation (init/apply/destroy). The aws provider in
-      # provider.tf sets access_key/secret_key explicitly, so it is unaffected by these.
-      AWS_ACCESS_KEY_ID: ${{ secrets.BACKEND_AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKEND_AWS_SECRET_ACCESS_KEY }}
-      # provider_credentials is an object variable, so TF_VAR_ carries the JSON object
       # verbatim (tofu parses TF_VAR_ for complex types as an HCL expression). The secret
       # holds the whole object, so optional attributes it omits keep their type defaults.
       TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
@@ -97,62 +75,10 @@ jobs:
           args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}  --accept-dns=false"
           tags: tag:github-actions
       
-      # State persists in S3 across runs, so a failed apply or failed destroy can be
-      # re-run against the same state. Bucket/region are non-sensitive repo variables;
-      # key is fixed so every run of this example targets the same state object.
-      - name: Tofu init
-        id: init
-        env:
-          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-          STATE_REGION: ${{ vars.TF_STATE_REGION }}
-        run: |
-          set -euo pipefail
-          if [ -z "${STATE_BUCKET}" ] || [ -z "${STATE_REGION}" ]; then
-            echo "::error::TF_STATE_BUCKET and TF_STATE_REGION repo variables must be set" >&2
-            exit 1
-          fi
-          tofu init \
-            -backend-config="bucket=${STATE_BUCKET}" \
-            -backend-config="region=${STATE_REGION}" \
-            -backend-config="key=gluekube-proxmox/examples-test/terraform.tfstate"
-
-      # Apply-path steps are skipped entirely for mode=destroy-only. The implicit
-      # success() gate on each `if` still short-circuits them on an earlier failure.
-      - name: Tofu apply
-        if: ${{ inputs.mode == 'apply' }}
-        run: tofu apply -auto-approve
-
-      - name: Invoke AutoGlue kubernetes setup
-        if: ${{ inputs.mode == 'apply' }}
-        env:
-          BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
-          API_KEY: ${{ secrets.AUTOGLUE_API_KEY }}
-          ORG_NAME: ${{ secrets.AUTOGLUE_ORG_NAME }}
-          CLUSTER_NAME: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
-          ACTION_MAKE_TARGET: ${{ inputs.action_make_target }}
-        run: bash invoke_autoglue.sh
-
-      - name: Check cluster health
-        if: ${{ inputs.mode == 'apply' }}
-        env:
-          BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
-          API_KEY: ${{ secrets.AUTOGLUE_API_KEY }}
-          ORG_NAME: ${{ secrets.AUTOGLUE_ORG_NAME }}
-        run: bash check_cluster_health.sh
-
-      # Runs for destroy-only always, and for mode=apply when the destroy input is set.
-      # always() so a failed apply still gets torn down. init must have succeeded, else
-      # there is no backend to destroy against.
-      - name: Tofu destroy
-        continue-on-error: true
-        if: ${{ always() && steps.init.outcome == 'success' && (inputs.mode == 'destroy-only' || inputs.destroy) }}
-        run: tofu destroy -auto-approve
-
       # Backstop cleanup: delete any AutoGlue org resources left behind after destroy.
-      # Runs on the same condition as destroy, and with always() so leftovers are still
-      # cleaned even if the destroy above failed partway.
+      # always() so leftovers are still cleaned even if apply or destroy failed partway.
       - name: Nuke AutoGlue org
-        if: ${{ always() && steps.init.outcome == 'success' && (inputs.mode == 'destroy-only' || inputs.destroy) }}
+        if: ${{ always() }}
         env:
           AUTOGLUE_BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
           AUTOGLUE_ORG_KEY: ${{ secrets.AUTOGLUE_KEY }}
@@ -162,12 +88,68 @@ jobs:
           python autoglue_nuke.py
 
       # Backstop cleanup: force-delete any Proxmox VMs tagged with the cluster name and
-      # any leftover cloud-init snippets. Same gate/always() rationale as the AutoGlue nuke.
+      # any leftover cloud-init snippets. Same always() rationale as the AutoGlue nuke.
       # The whole provider_credentials object (JSON or HCL) is passed through; the script
       # extracts endpoint/api_token/insecure itself. Reaches Proxmox over the Tailscale
       # exit node set up above.
       - name: Nuke Proxmox resources
-        if: ${{ always() && steps.init.outcome == 'success' && (inputs.mode == 'destroy-only' || inputs.destroy) }}
+        if: ${{ always() }}
+        env:
+          PROXMOX_PROVIDER_CREDENTIALS: ${{ secrets.PROVIDER_CREDENTIALS }}
+          PROXMOX_CLUSTER_NAME: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+        run: |
+          python -m pip install --quiet requests
+          python proxmox_nuke.py
+
+      - name: Tofu init
+        run: tofu init
+
+      - name: Tofu apply
+        run: tofu apply -auto-approve
+
+      - name: Invoke AutoGlue kubernetes setup
+        env:
+          BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
+          API_KEY: ${{ secrets.AUTOGLUE_API_KEY }}
+          ORG_NAME: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          CLUSTER_NAME: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          # inputs is empty on scheduled runs, so fall back to the dispatch default.
+          ACTION_MAKE_TARGET: ${{ inputs.action_make_target || 'setup' }}
+        run: bash invoke_autoglue.sh
+
+      - name: Check cluster health
+        env:
+          BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
+          API_KEY: ${{ secrets.AUTOGLUE_API_KEY }}
+          ORG_NAME: ${{ secrets.AUTOGLUE_ORG_NAME }}
+        run: bash check_cluster_health.sh
+
+      # Teardown always runs, so no run can leave the shared state or the cluster behind.
+      # continue-on-error keeps a partial/failed destroy from blocking the nukes below.
+      - name: Tofu destroy
+        continue-on-error: true
+        if: ${{ always() }}
+        run: tofu destroy -auto-approve
+
+      # Backstop cleanup: delete any AutoGlue org resources left behind after destroy.
+      # always() so leftovers are still cleaned even if apply or destroy failed partway.
+      - name: Nuke AutoGlue org
+        if: ${{ always() }}
+        env:
+          AUTOGLUE_BASE_URL: ${{ secrets.AUTOGLUE_BASE_URL }}
+          AUTOGLUE_ORG_KEY: ${{ secrets.AUTOGLUE_KEY }}
+          AUTOGLUE_ORG_SECRET: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+        run: |
+          python -m pip install --quiet requests
+          python autoglue_nuke.py
+
+      # Backstop cleanup: force-delete any Proxmox VMs tagged with the cluster name and
+      # any leftover cloud-init snippets. Same always() rationale as the AutoGlue nuke.
+      # The whole provider_credentials object (JSON or HCL) is passed through; the script
+      # extracts endpoint/api_token/insecure itself. Reaches Proxmox over the Tailscale
+      # exit node set up above.
+      - name: Nuke Proxmox resources
+        if: ${{ always() }}
         env:
           PROXMOX_PROVIDER_CREDENTIALS: ${{ secrets.PROVIDER_CREDENTIALS }}
           PROXMOX_CLUSTER_NAME: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
