@@ -15,18 +15,27 @@
 #   CLUSTER_NAME        Name of the cluster to look up
 #   ACTION_MAKE_TARGET  make_target of the action to run (the k8s setup target)
 # Optional:
-#   POLL_INTERVAL_SECONDS  seconds between status checks (default 300)
+#   POLL_INTERVAL_SECONDS  seconds between status checks (default 30)
+#   POLL_TIMEOUT_SECONDS   give up on the run after this long (default 2700 = 45m)
+#   INITIAL_DELAY_SECONDS  settle time before touching the API at all (default 300)
 set -euo pipefail
 
-POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-300}"
+POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-30}"
+# Kept under the workflow job's timeout-minutes so the script fails with a useful message
+# naming the last status, rather than the job being killed mid-poll with no explanation.
+POLL_TIMEOUT_SECONDS="${POLL_TIMEOUT_SECONDS:-2700}"
+# Its own knob rather than reusing POLL_INTERVAL_SECONDS: this is a settle window, not a
+# poll cadence, so dropping the poll interval must not silently shorten it.
+INITIAL_DELAY_SECONDS="${INITIAL_DELAY_SECONDS:-300}"
 
-sleep "${POLL_INTERVAL_SECONDS}"
-
+# Validate before the settle sleep, so a missing variable fails immediately.
 : "${BASE_URL:?BASE_URL is required}"
 : "${API_KEY:?API_KEY is required}"
 : "${ORG_NAME:?ORG_NAME is required}"
 : "${CLUSTER_NAME:?CLUSTER_NAME is required}"
 : "${ACTION_MAKE_TARGET:?ACTION_MAKE_TARGET is required}"
+
+sleep "${INITIAL_DELAY_SECONDS}"
 
 echo "==> Step 1: Getting org_id for org '${ORG_NAME}'..."
 ORGS=$(curl -sfS --http1.1 -X GET "${BASE_URL}/orgs" \
@@ -119,27 +128,39 @@ if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
 fi
 echo "Started run_id: ${RUN_ID}"
 
-echo "==> Step 6: Polling run status every ${POLL_INTERVAL_SECONDS}s..."
+echo "==> Step 6: Polling run status every ${POLL_INTERVAL_SECONDS}s (giving up after $(( POLL_TIMEOUT_SECONDS / 60 ))m)..."
+# SECONDS is reset here so the deadline covers only the poll loop, not the settle sleep
+# and setup calls above.
+SECONDS=0
+LAST_STATUS="unknown (no successful status check yet)"
+
 while true; do
+  if [ "$SECONDS" -ge "$POLL_TIMEOUT_SECONDS" ]; then
+    echo "ERROR: giving up on run ${RUN_ID} after $(( SECONDS / 60 ))m — last status seen: ${LAST_STATUS}"
+    echo "The run may still be in progress; check it at ${BASE_URL}/clusters/${CLUSTER_ID}/runs/${RUN_ID}"
+    exit 1
+  fi
+
   RUN=$(curl -sfS --http1.1 -X GET "${BASE_URL}/clusters/${CLUSTER_ID}/runs/${RUN_ID}" \
     -H "accept: application/json" \
     -H "X-API-KEY: ${API_KEY}" \
     -H "x-org-id: ${ORG_ID}") || {
-    echo "WARN: status check failed (transient?), retrying in ${POLL_INTERVAL_SECONDS}s"
+    echo "WARN: status check failed (transient?), retrying in ${POLL_INTERVAL_SECONDS}s (last status: ${LAST_STATUS}, ${SECONDS}s elapsed)"
     sleep "${POLL_INTERVAL_SECONDS}"
     continue
   }
 
   STATUS=$(echo "$RUN" | jq -r '.status' | tr '[:upper:]' '[:lower:]')
-  echo "run ${RUN_ID} status: ${STATUS}"
+  LAST_STATUS="$STATUS"
+  echo "run ${RUN_ID} status: ${STATUS} (${SECONDS}s elapsed)"
 
   case "$STATUS" in
     succeeded)
-      echo "Run succeeded."
+      echo "Run succeeded after ${SECONDS}s."
       break
       ;;
     failed)
-      echo "ERROR: run failed."
+      echo "ERROR: run failed after ${SECONDS}s."
       echo "$RUN" | jq -r '.error // "no error message provided"'
       exit 1
       ;;

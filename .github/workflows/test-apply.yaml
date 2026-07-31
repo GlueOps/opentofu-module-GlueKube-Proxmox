@@ -30,6 +30,9 @@ concurrency:
 jobs:
   test-apply:
     runs-on: ubuntu-latest
+    # Backstop only: invoke_autoglue.sh gives up on its own at 45m with a message naming
+    # the last status. This stops a hang elsewhere from burning the 6h default.
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: examples/test

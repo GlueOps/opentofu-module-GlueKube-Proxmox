@@ -118,15 +118,54 @@ SSH_OPTS=(
 
 # Remote check: print all pods, then fail if any pod is in a Pending or Failed phase.
 # Runs on the master under the kubeadm admin kubeconfig.
+#
+# NOTE: this whole string is interpolated into `sudo bash -c '...'` below, so it must not
+# contain a single quote anywhere — use double quotes only.
+#
+# On any failure it dumps cluster state before exiting: nodes, all pods, a describe for
+# each pod flagged unhealthy, and the tail of the event log. Every diagnostic is `|| true`
+# so a broken apiserver still lets the rest of the dump through. The ERR trap covers the
+# kubectl calls failing outright; the Pending/Failed branch calls the dump directly, since
+# an explicit `exit` does not fire an ERR trap.
 REMOTE_CHECK='
 set -euo pipefail
 export KUBECONFIG=/etc/kubernetes/admin.conf
+
+dump_diagnostics() {
+  echo ""
+  echo "================== FAILURE DIAGNOSTICS =================="
+
+  echo "--- kubectl get nodes -o wide ---"
+  kubectl get nodes -o wide 2>&1 || true
+
+  echo "--- kubectl get pods -A -o wide ---"
+  kubectl get pods -A -o wide 2>&1 || true
+
+  if [ -n "${bad:-}" ]; then
+    echo "--- describe unhealthy pods ---"
+    printf "%s\n" "$bad" | while read -r ref phase; do
+      [ -n "$ref" ] || continue
+      ns=${ref%%/*}
+      name=${ref#*/}
+      echo "--- kubectl describe pod -n $ns $name ($phase) ---"
+      kubectl describe pod -n "$ns" "$name" 2>&1 || true
+    done
+  fi
+
+  echo "--- kubectl get events -A --sort-by=.lastTimestamp (last 50) ---"
+  kubectl get events -A --sort-by=.lastTimestamp 2>&1 | tail -n 50 || true
+
+  echo "========================================================"
+}
+trap dump_diagnostics ERR
+
 kubectl get pods -A
 bad=$(kubectl get pods -A \
   -o jsonpath="{range .items[?(@.status.phase==\"Pending\")]}{.metadata.namespace}/{.metadata.name} Pending{\"\n\"}{end}{range .items[?(@.status.phase==\"Failed\")]}{.metadata.namespace}/{.metadata.name} Failed{\"\n\"}{end}")
 if [ -n "$bad" ]; then
   echo "ERROR: pods in Pending/Failed status:"
   echo "$bad"
+  dump_diagnostics
   exit 1
 fi
 echo "All pods are healthy (none Pending or Failed)."
