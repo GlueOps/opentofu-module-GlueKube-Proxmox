@@ -84,7 +84,7 @@ jobs:
       - name: Pre-Nuke AutoGlue org
         if: ${{ always() }}
         continue-on-error: true
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@main
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           org-key: ${{ secrets.AUTOGLUE_KEY }}
@@ -93,7 +93,7 @@ jobs:
       - name: Pre-Nuke Proxmox resources
         if: ${{ always() }}
         continue-on-error: true
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@main
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
@@ -105,7 +105,7 @@ jobs:
         run: tofu apply -auto-approve
 
       - name: Invoke AutoGlue kubernetes setup
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@main
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -117,7 +117,7 @@ jobs:
           action-make-target: ${{ inputs.action_make_target || 'setup' }}
 
       - name: Check cluster health
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@main
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -134,7 +134,7 @@ jobs:
       # always() so leftovers are still cleaned even if apply or destroy failed partway.
       - name: Nuke AutoGlue org
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@main
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           org-key: ${{ secrets.AUTOGLUE_KEY }}
@@ -147,7 +147,7 @@ jobs:
       # exit node set up above.
       - name: Nuke Proxmox resources
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@main
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
