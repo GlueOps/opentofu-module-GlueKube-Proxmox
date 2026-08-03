@@ -59,10 +59,15 @@ jobs:
       TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@v1
+        uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1.0.8
+        with:
+          # Pinned so an OpenTofu release cannot break the nightly on a day nobody
+          # touched the code — an unpinned break presents as a module regression and
+          # costs a day of chasing the wrong cause. Bump deliberately.
+          tofu_version: "1.12.5"
 
       # Python is no longer set up here: the nuke-* actions own actions/setup-python
       # and install their own pinned requests, so the caller carries no Python setup.
@@ -74,16 +79,19 @@ jobs:
         run: echo "TF_VAR_gluekube_docker_tag=${TAG}" >> "$GITHUB_ENV"
 
       - name: Setup Tailscale
-        uses: tailscale/github-action@v4
+        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
           args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}  --accept-dns=false"
           tags: tag:github-actions
       
+
+      # Pre-flight clean slate. Not continue-on-error and not always(): if we cannot
+      # prove the org and the Proxmox cluster are empty before applying, the health
+      # check downstream can pass against leftovers from a previous run instead of
+      # the cluster this run built. Failing here is cheaper than a false green.
       - name: Pre-Nuke AutoGlue org
-        if: ${{ always() }}
-        continue-on-error: true
         uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@main
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
@@ -91,8 +99,6 @@ jobs:
           org-secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
 
       - name: Pre-Nuke Proxmox resources
-        if: ${{ always() }}
-        continue-on-error: true
         uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@main
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
@@ -122,17 +128,32 @@ jobs:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
           org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          # Restricts the bastion/master lookup to THIS run's cluster, so a leftover
+          # cluster from a previous run cannot be checked instead. The pre-flight
+          # nukes above are the primary isolation guarantee; this is the backstop.
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
 
-      # Teardown always runs, so no run can leave the shared state or the cluster behind.
-      # continue-on-error keeps a partial/failed destroy from blocking the nukes below.
+      # Teardown always runs, so no run can leave the cluster behind. continue-on-error
+      # keeps a partial/failed destroy from blocking the nukes below, which are what
+      # actually guarantee cleanup here.
+      #
+      # A failed destroy does NOT fail the job. It is known to fail intermittently
+      # against this stack, and with no remote state the nukes are the teardown
+      # mechanism of record — destroy is best-effort, the nukes are the guarantee.
+      # The "Teardown verdict" step still reports the failure as a warning so it is
+      # visible rather than silent; what turns the job red is a nuke failing.
       - name: Tofu destroy
+        id: destroy
         continue-on-error: true
         if: ${{ always() }}
         run: tofu destroy -auto-approve
 
       # Backstop cleanup: delete any AutoGlue org resources left behind after destroy.
       # always() so leftovers are still cleaned even if apply or destroy failed partway.
+      # Deliberately NOT continue-on-error: with no remote state, the nukes are the only
+      # teardown guarantee, so a nuke that fails must turn the job red on its own.
       - name: Nuke AutoGlue org
+        id: nuke_autoglue
         if: ${{ always() }}
         uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@main
         with:
@@ -146,8 +167,79 @@ jobs:
       # extracts endpoint/api_token/insecure itself. Reaches Proxmox over the Tailscale
       # exit node set up above.
       - name: Nuke Proxmox resources
+        id: nuke_proxmox
         if: ${{ always() }}
         uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@main
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
+      # Last step in the job, so every teardown path above has already run.
+      #
+      # What this step is for: teardown used to be able to fail completely while the job
+      # stayed green, and you found out from the Proxmox bill. It reports every teardown
+      # outcome into the step summary so nothing is silent.
+      #
+      # What turns the job RED is cleanup not having happened — i.e. a nuke failing.
+      # A failed `tofu destroy` on its own does NOT, because:
+      #   - it fails intermittently against this stack, and a nightly that goes red for
+      #     an expected failure trains people to ignore red, which is worse than the
+      #     failure itself;
+      #   - with no remote state (#402) the nukes are the teardown mechanism of record.
+      #     Destroy is best-effort; the nukes are the guarantee.
+      # It is still surfaced as a ::warning:: annotation, so it shows on the run without
+      # being fatal — invisible is what we were fixing, not non-fatal.
+      #
+      # The cases:
+      #   nukes ok, destroy ok      -> green, clean
+      #   nukes ok, destroy failed  -> green with a warning. Nothing is left running.
+      #   a nuke failed             -> RED. Possibly live orphaned infrastructure, and
+      #                                if destroy failed too, almost certainly.
+      - name: Teardown verdict
+        if: ${{ always() }}
+        env:
+          DESTROY: ${{ steps.destroy.outcome }}
+          NUKE_AUTOGLUE: ${{ steps.nuke_autoglue.outcome }}
+          NUKE_PROXMOX: ${{ steps.nuke_proxmox.outcome }}
+        run: |
+          set -euo pipefail
+
+          # Anything that is not "success" counts as not cleaned up, including "skipped":
+          # a nuke that never ran has proved nothing about what is left behind.
+          nukes_ok=true
+          if [ "$NUKE_AUTOGLUE" != "success" ] || [ "$NUKE_PROXMOX" != "success" ]; then
+            nukes_ok=false
+          fi
+
+          {
+            echo "### Teardown"
+            echo ""
+            echo "| Step | Outcome | Fails the job? |"
+            echo "| --- | --- | --- |"
+            echo "| tofu destroy | \`${DESTROY}\` | no — best-effort |"
+            echo "| nuke AutoGlue org | \`${NUKE_AUTOGLUE}\` | yes |"
+            echo "| nuke Proxmox resources | \`${NUKE_PROXMOX}\` | yes |"
+            echo ""
+          } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+          if [ "$nukes_ok" = true ]; then
+            if [ "$DESTROY" = "success" ]; then
+              echo "Teardown clean: destroy succeeded and both nukes came back empty."
+            else
+              echo "::warning title=tofu destroy did not succeed::'tofu destroy' did not succeed (outcome: ${DESTROY}), but both nukes then ran clean, so nothing should be left running. Not failing the job: destroy is best-effort here and the nukes are the teardown mechanism of record."
+              echo "Teardown completed via the nukes; 'tofu destroy' outcome was '${DESTROY}'."
+            fi
+            exit 0
+          fi
+
+          if [ "$DESTROY" != "success" ]; then
+            echo "ERROR: teardown FAILED and the nukes did not clean up after it" >&2
+            echo "(destroy: ${DESTROY}, autoglue: ${NUKE_AUTOGLUE}, proxmox: ${NUKE_PROXMOX})." >&2
+            echo "There is very likely live orphaned infrastructure in Proxmox and/or the" >&2
+            echo "AutoGlue org right now. Check both by hand before re-running." >&2
+            exit 1
+          fi
+
+          echo "ERROR: 'tofu destroy' succeeded but a nuke did not (autoglue: ${NUKE_AUTOGLUE}, proxmox: ${NUKE_PROXMOX})." >&2
+          echo "Resources the nuke could not delete may still exist. Check the failing nuke's log." >&2
+          exit 1

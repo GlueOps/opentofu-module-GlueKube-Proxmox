@@ -45,3 +45,7 @@ hosts.ini
 .env
 
 **/inventory/*.yaml
+
+# Python bytecode (the nuke/health scripts are Python; these are build artifacts)
+__pycache__/
+*.pyc
