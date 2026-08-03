@@ -36,27 +36,6 @@ jobs:
     defaults:
       run:
         working-directory: examples/test
-    env:
-      # verbatim (tofu parses TF_VAR_ for complex types as an HCL expression). The secret
-      # holds the whole object, so optional attributes it omits keep their type defaults.
-      TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
-      # Waggle: endpoint/api_key configure the waggle provider, datacenter_id is passed
-      # through to the node pools and bastion. All three are required in practice here,
-      # since every node pool in main.tf sets waggle_slot_name.
-      TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
-      TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
-      TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
-      # AutoGlue integration
-      TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
-      TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
-      TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
-      TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
-      # Route53 config
-      TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
-      TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
-      TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
-      TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
-      TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -92,14 +71,14 @@ jobs:
       # check downstream can pass against leftovers from a previous run instead of
       # the cluster this run built. Failing here is cheaper than a false green.
       - name: Pre-Nuke AutoGlue org
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@main
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           org-key: ${{ secrets.AUTOGLUE_KEY }}
           org-secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
 
       - name: Pre-Nuke Proxmox resources
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@main
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
@@ -107,11 +86,35 @@ jobs:
       - name: Tofu init
         run: tofu init
 
+      # KEEP IN SYNC with the identical block on `Tofu destroy` below. Destroy has to
+      # re-evaluate the same provider configuration, so a variable added here and not
+      # there breaks teardown rather than apply.
       - name: Tofu apply
+        env:
+          # verbatim (tofu parses TF_VAR_ for complex types as an HCL expression). The secret
+          # holds the whole object, so optional attributes it omits keep their type defaults.
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          # Waggle: endpoint/api_key configure the waggle provider, datacenter_id is passed
+          # through to the node pools and bastion. All three are required in practice here,
+          # since every node pool in main.tf sets waggle_slot_name.
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          # AutoGlue integration
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          # Route53 config
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
         run: tofu apply -auto-approve
 
       - name: Invoke AutoGlue kubernetes setup
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@main
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -123,7 +126,7 @@ jobs:
           action-make-target: ${{ inputs.action_make_target || 'setup' }}
 
       - name: Check cluster health
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@main
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -146,6 +149,21 @@ jobs:
         id: destroy
         continue-on-error: true
         if: ${{ always() }}
+        # KEEP IN SYNC with the identical block on `Tofu apply` above.
+        env:
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
         run: tofu destroy -auto-approve
 
       # Backstop cleanup: delete any AutoGlue org resources left behind after destroy.
@@ -155,7 +173,7 @@ jobs:
       - name: Nuke AutoGlue org
         id: nuke_autoglue
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@main
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           org-key: ${{ secrets.AUTOGLUE_KEY }}
@@ -169,7 +187,7 @@ jobs:
       - name: Nuke Proxmox resources
         id: nuke_proxmox
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@main
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}

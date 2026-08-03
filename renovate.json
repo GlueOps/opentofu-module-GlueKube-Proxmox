@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "test-apply.yaml holds cloud credentials, so its actions are pinned to full SHAs. Renovate rewrites both the SHA and the trailing '# vX.Y.Z' comment, which is the only thing that keeps a pin from silently going stale.",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "tofu_version pinned on opentofu/setup-opentofu. Without this the version is frozen forever and nobody notices; with it, an OpenTofu release arrives as a reviewable PR instead of breaking the nightly on a day nobody touched the code.",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "matchStrings": ["tofu_version:\\s*[\"']?(?<currentValue>\\d+\\.\\d+\\.\\d+)[\"']?"],
+      "depNameTemplate": "opentofu/opentofu",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ]
+}
