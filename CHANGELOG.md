@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.0...v0.3.1) (2026-08-07)
+
+
+### Bug Fixes
+
+* set ballooning default to false ([f7e8c3b](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/f7e8c3ba46084db74a0f74de6be163af41645da0))
+
 ## [0.3.0](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.2.1...v0.3.0) (2026-08-03)
 
 
