@@ -167,7 +167,7 @@ module "captain" {
 | Name | Version |
 |------|---------|
 | <a name="requirement_autoglue"></a> [autoglue](#requirement\_autoglue) | 0.10.12 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.110.0 |
+| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.111.1 |
 | <a name="requirement_waggle"></a> [waggle](#requirement\_waggle) | 0.1.20 |
 
 ## Providers
@@ -175,7 +175,7 @@ module "captain" {
 | Name | Version |
 |------|---------|
 | <a name="provider_autoglue"></a> [autoglue](#provider\_autoglue) | 0.10.12 |
-| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.110.0 |
+| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.111.1 |
 | <a name="provider_waggle"></a> [waggle](#provider\_waggle) | 0.1.20 |
 
 ## Modules
@@ -199,8 +199,8 @@ module "captain" {
 | autoglue_record_set.cluster_record | resource |
 | autoglue_server.bastion | resource |
 | autoglue_ssh_key.bastion | resource |
-| [proxmox_virtual_environment_file.bastion_cloud_init](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/virtual_environment_file) | resource |
-| [proxmox_virtual_environment_vm.bastion](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/virtual_environment_vm) | resource |
+| [proxmox_virtual_environment_file.bastion_cloud_init](https://registry.terraform.io/providers/bpg/proxmox/0.111.1/docs/resources/virtual_environment_file) | resource |
+| [proxmox_virtual_environment_vm.bastion](https://registry.terraform.io/providers/bpg/proxmox/0.111.1/docs/resources/virtual_environment_vm) | resource |
 | waggle_placements.bastion | resource |
 | waggle_slots.available_slots | data source |
 
