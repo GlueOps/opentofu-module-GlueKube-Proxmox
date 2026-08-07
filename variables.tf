@@ -91,7 +91,7 @@ variable "node_pools" {
     }))
     available_nodes  = list(string)
     attached         = optional(bool, true)
-    ballooning       = optional(bool, true)
+    ballooning       = optional(bool, false)
     waggle_slot_name = optional(string)
 
   }))

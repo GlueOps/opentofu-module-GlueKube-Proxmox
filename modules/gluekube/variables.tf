@@ -70,7 +70,7 @@ variable "attached" {
 variable "ballooning" {
   type        = bool
   description = "Enable memory ballooning for this node pool"
-  default     = true
+  default     = false
 }
 
 variable "available_nodes" {
