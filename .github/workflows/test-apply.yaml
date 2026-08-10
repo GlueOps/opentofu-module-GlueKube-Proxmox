@@ -25,7 +25,7 @@ permissions:
 # apply and teardown.
 concurrency:
   group: test-apply
-  cancel-in-progress: false
+  cancel-in-progress: false 
 
 jobs:
   test-apply:
@@ -71,17 +71,32 @@ jobs:
       # check downstream can pass against leftovers from a previous run instead of
       # the cluster this run built. Failing here is cheaper than a false green.
       - name: Pre-Nuke AutoGlue org
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@2fa9cd245e87b55a5ea5d863e8427f4a7e06abf3 # v1.0.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           org-key: ${{ secrets.AUTOGLUE_KEY }}
           org-secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
 
       - name: Pre-Nuke Proxmox resources
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@2fa9cd245e87b55a5ea5d863e8427f4a7e06abf3 # v1.0.1
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
+      # Waggle holds the node pools and placements that decide which Proxmox host each
+      # VM lands on. A leftover pool from a previous run keeps its slot reserved, so
+      # this run's apply can fail to place — same clean-slate rationale as above.
+      - name: Pre-Nuke Waggle node pools
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-waggle@2fa9cd245e87b55a5ea5d863e8427f4a7e06abf3 # v1.0.1
+        with:
+          token: ${{ secrets.WAGGLE_API_KEY }}
+          base-url: ${{ secrets.WAGGLE_ENDPOINT }}
+          # Pool names are "<cluster-name>-<pool>-<role>" (modules/gluekube/node.tf) and
+          # "<cluster-name>-bastion" (bastion.tf), so the cluster name is the exact prefix
+          # for everything this run creates — same scoping as nuke-proxmox's cluster-name.
+          # The action's "test-" default is NOT used: it silently matches nothing (exit 0,
+          # green job, no cleanup) unless the cluster name happens to start with "test-".
+          name-prefix: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
 
       - name: Tofu init
         run: tofu init
@@ -114,7 +129,7 @@ jobs:
         run: tofu apply -auto-approve
 
       - name: Invoke AutoGlue kubernetes setup
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@2fa9cd245e87b55a5ea5d863e8427f4a7e06abf3 # v1.0.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -126,7 +141,7 @@ jobs:
           action-make-target: ${{ inputs.action_make_target || 'setup' }}
 
       - name: Check cluster health
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@2fa9cd245e87b55a5ea5d863e8427f4a7e06abf3 # v1.0.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -173,7 +188,7 @@ jobs:
       - name: Nuke AutoGlue org
         id: nuke_autoglue
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@2fa9cd245e87b55a5ea5d863e8427f4a7e06abf3 # v1.0.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           org-key: ${{ secrets.AUTOGLUE_KEY }}
@@ -187,10 +202,23 @@ jobs:
       - name: Nuke Proxmox resources
         id: nuke_proxmox
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@66f2febb1c31b6a8a75f1fb35b38c9765d327169 # v0.0.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@2fa9cd245e87b55a5ea5d863e8427f4a7e06abf3 # v1.0.1
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
+      # Backstop cleanup: delete the Waggle node pools this run created. Same always()
+      # and no-continue-on-error rationale as the two nukes above — a pool left behind
+      # keeps its slot reserved and will block the next run's placement.
+      - name: Nuke Waggle node pools
+        id: nuke_waggle
+        if: ${{ always() }}
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-waggle@2fa9cd245e87b55a5ea5d863e8427f4a7e06abf3 # v1.0.1
+        with:
+          token: ${{ secrets.WAGGLE_API_KEY }}
+          base-url: ${{ secrets.WAGGLE_ENDPOINT }}
+          # Same prefix as the pre-flight nuke above — see the rationale there.
+          name-prefix: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
 
       # Last step in the job, so every teardown path above has already run.
       #
@@ -213,19 +241,24 @@ jobs:
       #   nukes ok, destroy failed  -> green with a warning. Nothing is left running.
       #   a nuke failed             -> RED. Possibly live orphaned infrastructure, and
       #                                if destroy failed too, almost certainly.
+      #
+      # "nukes" means all three: AutoGlue, Proxmox and Waggle. Any new nuke step added
+      # above must get an `id`, `if: always()`, and a row here — a nuke that is not in
+      # this list can fail without turning the job red, which is the hole this closes.
       - name: Teardown verdict
         if: ${{ always() }}
         env:
           DESTROY: ${{ steps.destroy.outcome }}
           NUKE_AUTOGLUE: ${{ steps.nuke_autoglue.outcome }}
           NUKE_PROXMOX: ${{ steps.nuke_proxmox.outcome }}
+          NUKE_WAGGLE: ${{ steps.nuke_waggle.outcome }}
         run: |
           set -euo pipefail
 
           # Anything that is not "success" counts as not cleaned up, including "skipped":
           # a nuke that never ran has proved nothing about what is left behind.
           nukes_ok=true
-          if [ "$NUKE_AUTOGLUE" != "success" ] || [ "$NUKE_PROXMOX" != "success" ]; then
+          if [ "$NUKE_AUTOGLUE" != "success" ] || [ "$NUKE_PROXMOX" != "success" ] || [ "$NUKE_WAGGLE" != "success" ]; then
             nukes_ok=false
           fi
 
@@ -237,6 +270,7 @@ jobs:
             echo "| tofu destroy | \`${DESTROY}\` | no — best-effort |"
             echo "| nuke AutoGlue org | \`${NUKE_AUTOGLUE}\` | yes |"
             echo "| nuke Proxmox resources | \`${NUKE_PROXMOX}\` | yes |"
+            echo "| nuke Waggle node pools | \`${NUKE_WAGGLE}\` | yes |"
             echo ""
           } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
@@ -252,12 +286,12 @@ jobs:
 
           if [ "$DESTROY" != "success" ]; then
             echo "ERROR: teardown FAILED and the nukes did not clean up after it" >&2
-            echo "(destroy: ${DESTROY}, autoglue: ${NUKE_AUTOGLUE}, proxmox: ${NUKE_PROXMOX})." >&2
-            echo "There is very likely live orphaned infrastructure in Proxmox and/or the" >&2
-            echo "AutoGlue org right now. Check both by hand before re-running." >&2
+            echo "(destroy: ${DESTROY}, autoglue: ${NUKE_AUTOGLUE}, proxmox: ${NUKE_PROXMOX}, waggle: ${NUKE_WAGGLE})." >&2
+            echo "There is very likely live orphaned infrastructure in Proxmox, the AutoGlue" >&2
+            echo "org and/or Waggle right now. Check all three by hand before re-running." >&2
             exit 1
           fi
 
-          echo "ERROR: 'tofu destroy' succeeded but a nuke did not (autoglue: ${NUKE_AUTOGLUE}, proxmox: ${NUKE_PROXMOX})." >&2
+          echo "ERROR: 'tofu destroy' succeeded but a nuke did not (autoglue: ${NUKE_AUTOGLUE}, proxmox: ${NUKE_PROXMOX}, waggle: ${NUKE_WAGGLE})." >&2
           echo "Resources the nuke could not delete may still exist. Check the failing nuke's log." >&2
           exit 1
