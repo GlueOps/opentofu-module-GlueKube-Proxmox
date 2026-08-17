@@ -4,7 +4,7 @@ output "role" {
 
 output "node_ipv4_addresses" {
   description = "The IPv4 addresses of nodes in this pool"
- value = [
+  value = [
     for vm in proxmox_virtual_environment_vm.cluster_node :
     one(flatten([
       for i, name in vm.network_interface_names :

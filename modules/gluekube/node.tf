@@ -45,7 +45,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
   }
 
   lifecycle {
-    ignore_changes = [node_name]
+    ignore_changes = [node_name, source_raw]
   }
 }
 
@@ -140,12 +140,12 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   tags = [var.cluster_name, var.role, var.name]
 
   lifecycle {
-    ignore_changes = [node_name]
+    ignore_changes = [node_name, initialization]
   }
 }
 
 resource "waggle_placements" "workers" {
-  depends_on   = [
+  depends_on = [
     proxmox_virtual_environment_vm.cluster_node,
   ]
   for_each     = local.use_waggle ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
