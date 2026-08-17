@@ -168,7 +168,7 @@ module "captain" {
 |------|---------|
 | <a name="requirement_autoglue"></a> [autoglue](#requirement\_autoglue) | 0.10.12 |
 | <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.110.0 |
-| <a name="requirement_waggle"></a> [waggle](#requirement\_waggle) | 0.1.20 |
+| <a name="requirement_waggle"></a> [waggle](#requirement\_waggle) | 0.1.21 |
 
 ## Providers
 
@@ -176,7 +176,7 @@ module "captain" {
 |------|---------|
 | <a name="provider_autoglue"></a> [autoglue](#provider\_autoglue) | 0.10.12 |
 | <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.110.0 |
-| <a name="provider_waggle"></a> [waggle](#provider\_waggle) | 0.1.20 |
+| <a name="provider_waggle"></a> [waggle](#provider\_waggle) | 0.1.21 |
 
 ## Modules
 
