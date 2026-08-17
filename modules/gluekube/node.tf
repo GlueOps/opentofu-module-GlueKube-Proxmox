@@ -45,7 +45,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
   }
 
   lifecycle {
-    ignore_changes = [node_name]
+    ignore_changes = [node_name, source_raw]
   }
 }
 
@@ -140,7 +140,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   tags = [var.cluster_name, var.role, var.name]
 
   lifecycle {
-    ignore_changes = [node_name]
+    ignore_changes = [node_name,initialization]
   }
 }
 
