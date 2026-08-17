@@ -1,7 +1,7 @@
 resource "autoglue_server" "node" {
-  for_each           = toset([for i in range(0, var.node_count) : tostring(i)])
-  hostname           = "${var.role}-${var.name}-${each.key}"
-private_ip_address = proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[
+  for_each = toset([for i in range(0, var.node_count) : tostring(i)])
+  hostname = "${var.role}-${var.name}-${each.key}"
+  private_ip_address = proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[
     index(proxmox_virtual_environment_vm.cluster_node[each.key].network_interface_names, "eth0")
   ][0]
   public_ip_address = var.subnet == "public" ? proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[
@@ -9,9 +9,9 @@ private_ip_address = proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_
     ][0] : proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[
     index(proxmox_virtual_environment_vm.cluster_node[each.key].network_interface_names, "eth0")
   ][0]
-  role               = var.role
-  ssh_key_id         = autoglue_ssh_key.ssh_key.id
-  ssh_user           = "cluster"
+  role       = var.role
+  ssh_key_id = autoglue_ssh_key.ssh_key.id
+  ssh_user   = "cluster"
 }
 
 
