@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.5](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.0...v0.3.5) (2026-08-28)
+
+
+### Features
+
+* trigger new release ([#38](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/38)) ([35dfcfa](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/35dfcfa7ca96542563ea26e87474907bf96f3b77))
+
+
+### Bug Fixes
+
+* add passwd -d for the cloud-init ([bee39d0](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/bee39d069024f20b7ac29c6e121db2b0e8927a84))
+* added waggle nuke ([8972399](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/8972399cf8af660ec280e4184cae3242402afdaa))
+* cloud init provoking a destroy once upgrading from v0.2.2 ([#35](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/35)) ([4c01a92](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/4c01a92712b282b67dd4c419802999abb818538e))
+* set ballooning default to false ([f7e8c3b](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/f7e8c3ba46084db74a0f74de6be163af41645da0))
+
 ## [0.3.0](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.2.1...v0.3.0) (2026-08-03)
 
 
