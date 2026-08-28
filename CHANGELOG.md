@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.5...v0.3.6) (2026-08-28)
+
+
+### Miscellaneous Chores
+
+* adding new lines to .gitignore ([#39](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/39)) ([0410080](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/0410080156f0730e185268c27edb25c6a742031f))
+
 ## [0.3.5](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.0...v0.3.5) (2026-08-28)
 
 
