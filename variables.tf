@@ -3,8 +3,6 @@ variable "provider_credentials" {
     name        = string
     endpoint    = string
     api_token   = optional(string)
-    username    = optional(string)
-    password    = optional(string)
     insecure    = optional(bool, false)
     private_key = optional(string)
   })
@@ -17,7 +15,7 @@ variable "gluekube_docker_image" {
 
 variable "gluekube_docker_tag" {
   type    = string
-  default = "v0.0.15-rc9"
+  default = "v1.34.5-gluekube.33"
 }
 
 
@@ -40,12 +38,10 @@ variable "autoglue" {
     })
 
     route_53_config = object({
-      aws_access_key_id     = string
-      aws_secret_access_key = string
-      aws_region            = string
-      domain_name           = string
-      zone_id               = string
-      credential_id         = string
+      aws_region    = string
+      domain_name   = string
+      zone_id       = string
+      credential_id = string
     })
   })
 }

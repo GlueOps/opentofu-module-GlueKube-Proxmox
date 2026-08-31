@@ -6,6 +6,9 @@ locals {
   cpu_cores = data.waggle_slots.available_slots.vcpu
   memory_mb = data.waggle_slots.available_slots.ram_gb * 1024
   disk_gb   = data.waggle_slots.available_slots.disk_gb
+
+  # Deterministic per-cluster vm_id prefix derived from the captain domain (100-999).
+  vm_id_prefix = 100 + parseint(substr(sha256(var.captain_domain), 0, 8), 16) % 900
 }
 
 module "waggle" {
@@ -50,7 +53,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 
   description = "GlueKube ${var.role} node - ${var.name}-${each.key}"
 
-  vm_id = var.proxmox_config.networks.nat.vlan_id * 500000 + (parseint(substr(sha256(var.name), 0, 8), 16) % 10000) * 50 + each.key
+  vm_id = local.vm_id_prefix * 500000 + (parseint(substr(sha256(var.name), 0, 8), 16) % 10000) * 50 + each.key
 
   machine = "q35"
   bios    = "ovmf"
@@ -132,7 +135,7 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
   tags = [var.cluster_name, var.role, var.name]
 
   lifecycle {
-    ignore_changes = [node_name, initialization]
+    ignore_changes = [node_name, initialization, vm_id]
   }
 }
 
@@ -146,55 +149,5 @@ resource "waggle_placements" "workers" {
 
   lifecycle {
     ignore_changes = [placement_id]
-  }
-}
-
-resource "proxmox_virtual_environment_firewall_rules" "inbound" {
-  for_each = var.subnet == "public" ? toset([for i in range(0, var.node_count) : tostring(i)]) : toset([])
-  depends_on = [
-    proxmox_virtual_environment_vm.cluster_node,
-  ]
-
-  node_name = proxmox_virtual_environment_vm.cluster_node[each.key].node_name
-  vm_id     = proxmox_virtual_environment_vm.cluster_node[each.key].vm_id
-
-  rule {
-    type    = "in"
-    action  = "ACCEPT"
-    comment = "Allow HTTP"
-    dport   = "80"
-    proto   = "tcp"
-    log     = "info"
-    iface   = "net1"
-  }
-
-  rule {
-    type    = "in"
-    action  = "ACCEPT"
-    comment = "Allow HTTPS"
-    dport   = "443"
-    proto   = "tcp"
-    log     = "info"
-    iface   = "net1"
-
-  }
-
-  rule {
-    type    = "in"
-    action  = "DROP"
-    comment = "Allow SSH"
-    dport   = "22"
-    proto   = "tcp"
-    log     = "info"
-    iface   = "net1"
-  }
-
-  rule {
-    type    = "in"
-    action  = "ACCEPT"
-    comment = "Allow ICMP"
-    proto   = "icmp"
-    log     = "info"
-    iface   = "net1"
   }
 }

@@ -75,3 +75,8 @@ variable "waggle_datacenter_id" {
 variable "waggle_slot_name" {
   type = string
 }
+
+variable "captain_domain" {
+  type        = string
+  description = "The cluster's captain domain. Used to derive a deterministic, per-cluster Proxmox vm_id prefix."
+}

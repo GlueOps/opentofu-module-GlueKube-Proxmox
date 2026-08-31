@@ -48,12 +48,10 @@ module "captain" {
     }
 
     route_53_config = {
-      aws_access_key_id     = var.route53_aws_access_key_id
-      aws_secret_access_key = var.route53_aws_secret_access_key
-      aws_region            = var.route53_region
-      domain_name           = var.domain_name
-      zone_id               = var.route53_zone_id
-      credential_id         = var.autoglue_credential_id
+      aws_region    = var.route53_region
+      domain_name   = var.domain_name
+      zone_id       = var.route53_zone_id
+      credential_id = var.autoglue_credential_id
     }
   }
 

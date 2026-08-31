@@ -7,6 +7,9 @@ locals {
   cpu_cores = data.waggle_slots.available_slots.vcpu
   memory_mb = data.waggle_slots.available_slots.ram_gb * 1024
   disk_gb   = data.waggle_slots.available_slots.disk_gb
+
+  # Deterministic per-cluster vm_id prefix derived from the captain domain (100-999).
+  vm_id_prefix = 100 + parseint(substr(sha256(var.autoglue.route_53_config.domain_name), 0, 8), 16) % 900
 }
 
 module "waggle" {
@@ -44,7 +47,7 @@ resource "proxmox_virtual_environment_vm" "bastion" {
 
   description = "GlueKube bastion"
 
-  vm_id   = var.proxmox_config.networks.nat.vlan_id * 500000 + (parseint(substr(sha256("${var.autoglue.autoglue_cluster_name}-bastion"), 0, 8), 16) % 10000) * 50
+  vm_id   = local.vm_id_prefix * 500000 + (parseint(substr(sha256("${var.autoglue.autoglue_cluster_name}-bastion"), 0, 8), 16) % 10000) * 50
   machine = "q35"
   bios    = "ovmf"
 
@@ -107,6 +110,10 @@ resource "proxmox_virtual_environment_vm" "bastion" {
   started = true
 
   tags = [var.autoglue.autoglue_cluster_name, "bastion"]
+
+  lifecycle {
+    ignore_changes = [vm_id]
+  }
 }
 
 

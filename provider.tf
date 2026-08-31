@@ -32,13 +32,6 @@ provider "autoglue" {
   org_secret = var.autoglue.credentials.autoglue_org_secret
 }
 
-provider "aws" {
-  alias      = "aws_route53"
-  region     = var.autoglue.route_53_config.aws_region
-  access_key = var.autoglue.route_53_config.aws_access_key_id
-  secret_key = var.autoglue.route_53_config.aws_secret_access_key
-}
-
 
 provider "waggle" {
   endpoint = var.waggle_endpoint
