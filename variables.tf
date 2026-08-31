@@ -24,11 +24,7 @@ variable "gluekube_docker_tag" {
 variable "bastion" {
   description = "Bastion configuration."
   type = object({
-    cores            = optional(number)
-    memory           = optional(number)
-    disk_size        = optional(number)
-    proxmox_node     = optional(string)
-    waggle_slot_name = optional(string)
+    waggle_slot_name = string
   })
 }
 
@@ -79,9 +75,6 @@ variable "node_pools" {
     node_count             = number
     role                   = string
     subnet                 = optional(string, "public")
-    cores                  = optional(number)
-    memory                 = optional(number)
-    disk_size              = optional(number)
     kubernetes_labels      = optional(map(string), {})
     kubernetes_annotations = optional(map(string), {})
     kubernetes_taints = list(object({
@@ -89,10 +82,8 @@ variable "node_pools" {
       value  = string
       effect = string
     }))
-    available_nodes  = list(string)
     attached         = optional(bool, true)
-    ballooning       = optional(bool, false)
-    waggle_slot_name = optional(string)
+    waggle_slot_name = string
 
   }))
 

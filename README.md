@@ -72,7 +72,6 @@ module "captain" {
       "role" : "master",
       "kubernetes_labels" : {},
       "kubernetes_taints" : [],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -90,7 +89,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : ["pve1","pve2","pve3"], # if available_nodes isn't empty, it get considered instead of waggle  
       "waggle_slot_name" : "large"
     },
     {
@@ -100,7 +98,6 @@ module "captain" {
       "node_count" : 2,
       "kubernetes_labels" : {},
       "kubernetes_taints" : [],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
 
@@ -119,7 +116,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -137,7 +133,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -155,7 +150,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
   ]
@@ -209,11 +203,11 @@ module "captain" {
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_autoglue"></a> [autoglue](#input\_autoglue) | Configuration for the AutoGlue platform integration, including cluster naming, credentials, and Route53 DNS settings. | <pre>object({<br/>    autoglue_cluster_name = string<br/><br/>    credentials = object({<br/>      autoglue_key        = string<br/>      autoglue_org_secret = string<br/>      base_url            = string<br/>    })<br/><br/>    route_53_config = object({<br/>      aws_access_key_id     = string<br/>      aws_secret_access_key = string<br/>      aws_region            = string<br/>      domain_name           = string<br/>      zone_id               = string<br/>      credential_id         = string<br/>    })<br/>  })</pre> | n/a | yes |
-| <a name="input_bastion"></a> [bastion](#input\_bastion) | Bastion configuration. | <pre>object({<br/>    cores            = optional(number)<br/>    memory           = optional(number)<br/>    disk_size        = optional(number)<br/>    proxmox_node     = optional(string)<br/>    waggle_slot_name = optional(string)<br/>  })</pre> | n/a | yes |
+| <a name="input_bastion"></a> [bastion](#input\_bastion) | Bastion configuration. | <pre>object({<br/>    waggle_slot_name = string<br/>  })</pre> | n/a | yes |
 | <a name="input_cluster_metadata"></a> [cluster\_metadata](#input\_cluster\_metadata) | Structured cluster metadata passed through to the autoglue-metadata module. All fields are required unless noted:<br/>  - calico\_network\_calico\_cidr: CIDR block for the Calico pod network (e.g. "10.244.0.0/16").<br/>  - network\_service\_cidr:       CIDR block for Kubernetes services (e.g. "10.96.0.0/12").<br/>  - cloud:                      Target cloud provider. One of: "aws", "proxmox", "hetzner".<br/>  - cloud\_vars:                 Optional map of cloud-specific overrides. When cloud is "proxmox",<br/>                                "calico\_node\_address\_autodetection\_v4" is required. | <pre>object({<br/>    calico_network_calico_cidr = string<br/>    network_service_cidr       = string<br/>    cloud                      = string<br/>    cloud_vars                 = optional(map(string), {}) # Holds the cloud-specific overrides<br/>  })</pre> | n/a | yes |
 | <a name="input_gluekube_docker_image"></a> [gluekube\_docker\_image](#input\_gluekube\_docker\_image) | n/a | `string` | `"ghcr.io/glueops/gluekube"` | no |
 | <a name="input_gluekube_docker_tag"></a> [gluekube\_docker\_tag](#input\_gluekube\_docker\_tag) | n/a | `string` | `"v0.0.15-rc9"` | no |
-| <a name="input_node_pools"></a> [node\_pools](#input\_node\_pools) | n/a | <pre>list(object({<br/>    name                   = string<br/>    node_count             = number<br/>    role                   = string<br/>    subnet                 = optional(string, "public")<br/>    cores                  = optional(number)<br/>    memory                 = optional(number)<br/>    disk_size              = optional(number)<br/>    kubernetes_labels      = optional(map(string), {})<br/>    kubernetes_annotations = optional(map(string), {})<br/>    kubernetes_taints = list(object({<br/>      key    = string<br/>      value  = string<br/>      effect = string<br/>    }))<br/>    available_nodes  = list(string)<br/>    attached         = optional(bool, true)<br/>    ballooning       = optional(bool, false)<br/>    waggle_slot_name = optional(string)<br/><br/>  }))</pre> | n/a | yes |
+| <a name="input_node_pools"></a> [node\_pools](#input\_node\_pools) | n/a | <pre>list(object({<br/>    name                   = string<br/>    node_count             = number<br/>    role                   = string<br/>    subnet                 = optional(string, "public")<br/>    kubernetes_labels      = optional(map(string), {})<br/>    kubernetes_annotations = optional(map(string), {})<br/>    kubernetes_taints = list(object({<br/>      key    = string<br/>      value  = string<br/>      effect = string<br/>    }))<br/>    attached         = optional(bool, true)<br/>    waggle_slot_name = string<br/><br/>  }))</pre> | n/a | yes |
 | <a name="input_provider_credentials"></a> [provider\_credentials](#input\_provider\_credentials) | n/a | <pre>object({<br/>    name        = string<br/>    endpoint    = string<br/>    api_token   = optional(string)<br/>    username    = optional(string)<br/>    password    = optional(string)<br/>    insecure    = optional(bool, false)<br/>    private_key = optional(string)<br/>  })</pre> | n/a | yes |
 | <a name="input_proxmox_config"></a> [proxmox\_config](#input\_proxmox\_config) | Proxmox infrastructure configuration including network bridges. | <pre>object({<br/>    networks = object({<br/>      public = object({<br/>        name = string<br/>      })<br/>      private = object({<br/>        name    = string<br/>        vlan_id = optional(number)<br/>      })<br/>      nat = object({<br/>        name    = string<br/>        vlan_id = optional(number)<br/>      })<br/>    })<br/>  })</pre> | n/a | yes |
 | <a name="input_waggle_api_key"></a> [waggle\_api\_key](#input\_waggle\_api\_key) | n/a | `string` | `null` | no |

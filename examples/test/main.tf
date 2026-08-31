@@ -65,7 +65,6 @@ module "captain" {
       "role" : "master",
       "kubernetes_labels" : {},
       "kubernetes_taints" : [],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -83,7 +82,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -93,7 +91,6 @@ module "captain" {
       "node_count" : 2,
       "kubernetes_labels" : {},
       "kubernetes_taints" : [],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
 
@@ -112,7 +109,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -130,7 +126,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -148,7 +143,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
   ]
