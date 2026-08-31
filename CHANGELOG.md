@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.7](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.6...v0.3.7) (2026-08-31)
+
+
+### Bug Fixes
+
+* remove old properties and leave waggle integration only ([#41](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/41)) ([8c836b7](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/8c836b71b87f10af456d5182e89d8782ea0196b2))
+
 ## [0.3.6](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.5...v0.3.6) (2026-08-28)
 
 
