@@ -3,8 +3,6 @@ variable "provider_credentials" {
     name        = string
     endpoint    = string
     api_token   = optional(string)
-    username    = optional(string)
-    password    = optional(string)
     insecure    = optional(bool, false)
     private_key = optional(string)
   })
@@ -17,18 +15,14 @@ variable "gluekube_docker_image" {
 
 variable "gluekube_docker_tag" {
   type    = string
-  default = "v0.0.15-rc9"
+  default = "v1.34.5-gluekube.33"
 }
 
 
 variable "bastion" {
   description = "Bastion configuration."
   type = object({
-    cores            = optional(number)
-    memory           = optional(number)
-    disk_size        = optional(number)
-    proxmox_node     = optional(string)
-    waggle_slot_name = optional(string)
+    waggle_slot_name = string
   })
 }
 
@@ -44,12 +38,10 @@ variable "autoglue" {
     })
 
     route_53_config = object({
-      aws_access_key_id     = string
-      aws_secret_access_key = string
-      aws_region            = string
-      domain_name           = string
-      zone_id               = string
-      credential_id         = string
+      aws_region    = string
+      domain_name   = string
+      zone_id       = string
+      credential_id = string
     })
   })
 }
@@ -79,9 +71,6 @@ variable "node_pools" {
     node_count             = number
     role                   = string
     subnet                 = optional(string, "public")
-    cores                  = optional(number)
-    memory                 = optional(number)
-    disk_size              = optional(number)
     kubernetes_labels      = optional(map(string), {})
     kubernetes_annotations = optional(map(string), {})
     kubernetes_taints = list(object({
@@ -89,10 +78,8 @@ variable "node_pools" {
       value  = string
       effect = string
     }))
-    available_nodes  = list(string)
     attached         = optional(bool, true)
-    ballooning       = optional(bool, false)
-    waggle_slot_name = optional(string)
+    waggle_slot_name = string
 
   }))
 

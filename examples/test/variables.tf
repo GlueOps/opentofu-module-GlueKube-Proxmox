@@ -3,8 +3,6 @@ variable "provider_credentials" {
     name        = string
     endpoint    = string
     api_token   = optional(string)
-    username    = optional(string)
-    password    = optional(string)
     insecure    = optional(bool, false)
     private_key = optional(string)
   })
@@ -17,7 +15,7 @@ variable "gluekube_docker_image" {
 
 variable "gluekube_docker_tag" {
   type    = string
-  default = "v1.34.5-gluekube.32"
+  default = "v1.34.5-gluekube.33"
 }
 
 
@@ -49,18 +47,6 @@ variable "autoglue_base_url" {
 ################################
 # Route53 config (AutoGlue captain domain)
 ################################
-variable "route53_aws_access_key_id" {
-  type        = string
-  description = "AWS access key id used by AutoGlue for Route53 management."
-  sensitive   = true
-}
-
-variable "route53_aws_secret_access_key" {
-  type        = string
-  description = "AWS secret access key used by AutoGlue for Route53 management."
-  sensitive   = true
-}
-
 variable "route53_region" {
   type        = string
   description = "AWS region for the Route53 provider."

@@ -67,41 +67,16 @@ variable "attached" {
   type = bool
 }
 
-variable "ballooning" {
-  type        = bool
-  description = "Enable memory ballooning for this node pool"
-  default     = false
-}
-
-variable "available_nodes" {
-  type        = list(string)
-  description = "List of available Proxmox node names for scheduling VMs"
-}
-
 variable "waggle_datacenter_id" {
   type    = string
   default = null
 }
 
 variable "waggle_slot_name" {
-  type    = string
-  default = null
+  type = string
 }
 
-variable "cores" {
-  type        = number
-  description = "Number of CPU cores per node (used when waggle_slot_name is not set)"
-  default     = null
-}
-
-variable "memory" {
-  type        = number
-  description = "Memory in MB per node (used when waggle_slot_name is not set)"
-  default     = null
-}
-
-variable "disk_size" {
-  type        = number
-  description = "Disk size in GB per node (used when waggle_slot_name is not set)"
-  default     = null
+variable "captain_domain" {
+  type        = string
+  description = "The cluster's captain domain. Used to derive a deterministic, per-cluster Proxmox vm_id prefix."
 }

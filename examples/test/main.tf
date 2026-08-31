@@ -48,12 +48,10 @@ module "captain" {
     }
 
     route_53_config = {
-      aws_access_key_id     = var.route53_aws_access_key_id
-      aws_secret_access_key = var.route53_aws_secret_access_key
-      aws_region            = var.route53_region
-      domain_name           = var.domain_name
-      zone_id               = var.route53_zone_id
-      credential_id         = var.autoglue_credential_id
+      aws_region    = var.route53_region
+      domain_name   = var.domain_name
+      zone_id       = var.route53_zone_id
+      credential_id = var.autoglue_credential_id
     }
   }
 
@@ -65,7 +63,6 @@ module "captain" {
       "role" : "master",
       "kubernetes_labels" : {},
       "kubernetes_taints" : [],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -83,7 +80,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -93,7 +89,6 @@ module "captain" {
       "node_count" : 2,
       "kubernetes_labels" : {},
       "kubernetes_taints" : [],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
 
@@ -112,7 +107,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -130,7 +124,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
     {
@@ -148,7 +141,6 @@ module "captain" {
           effect = "NoSchedule"
         }
       ],
-      "available_nodes" : [],
       "waggle_slot_name" : "large"
     },
   ]

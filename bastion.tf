@@ -1,21 +1,21 @@
 
 data "waggle_slots" "available_slots" {
-  count = var.bastion.waggle_slot_name != null ? 1 : 0
-  name  = var.bastion.waggle_slot_name
+  name = var.bastion.waggle_slot_name
 }
 
 locals {
-  use_waggle = var.bastion.waggle_slot_name != null
-  cpu_cores  = local.use_waggle ? data.waggle_slots.available_slots[0].vcpu : var.bastion.cores
-  memory_mb  = local.use_waggle ? data.waggle_slots.available_slots[0].ram_gb * 1024 : var.bastion.memory
-  disk_gb    = local.use_waggle ? data.waggle_slots.available_slots[0].disk_gb : var.bastion.disk_size
+  cpu_cores = data.waggle_slots.available_slots.vcpu
+  memory_mb = data.waggle_slots.available_slots.ram_gb * 1024
+  disk_gb   = data.waggle_slots.available_slots.disk_gb
+
+  # Deterministic per-cluster vm_id prefix derived from the captain domain (100-999).
+  vm_id_prefix = 100 + parseint(substr(sha256(var.autoglue.route_53_config.domain_name), 0, 8), 16) % 900
 }
 
 module "waggle" {
-  count                = local.use_waggle ? 1 : 0
   source               = "./modules/waggle"
   pool_name            = "${var.autoglue.autoglue_cluster_name}-bastion"
-  slot_id              = data.waggle_slots.available_slots[0].id
+  slot_id              = data.waggle_slots.available_slots.id
   desired_count        = 1
   waggle_datacenter_id = var.waggle_datacenter_id
 }
@@ -28,7 +28,7 @@ resource "autoglue_ssh_key" "bastion" {
 resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
   content_type = "snippets"
   datastore_id = "local"
-  node_name    = local.use_waggle ? module.waggle[0].nodes_placement_targets[0].node : var.bastion.proxmox_node
+  node_name    = module.waggle.nodes_placement_targets[0].node
 
 
   source_raw {
@@ -43,11 +43,11 @@ resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
 
 resource "proxmox_virtual_environment_vm" "bastion" {
   name      = "${var.autoglue.autoglue_cluster_name}-bastion"
-  node_name = local.use_waggle ? module.waggle[0].nodes_placement_targets[0].node : var.bastion.proxmox_node
+  node_name = module.waggle.nodes_placement_targets[0].node
 
   description = "GlueKube bastion"
 
-  vm_id   = local.use_waggle ? var.proxmox_config.networks.nat.vlan_id * 500000 + (parseint(substr(sha256("${var.autoglue.autoglue_cluster_name}-bastion"), 0, 8), 16) % 10000) * 50 : null
+  vm_id   = local.vm_id_prefix * 500000 + (parseint(substr(sha256("${var.autoglue.autoglue_cluster_name}-bastion"), 0, 8), 16) % 10000) * 50
   machine = "q35"
   bios    = "ovmf"
 
@@ -110,12 +110,15 @@ resource "proxmox_virtual_environment_vm" "bastion" {
   started = true
 
   tags = [var.autoglue.autoglue_cluster_name, "bastion"]
+
+  lifecycle {
+    ignore_changes = [vm_id]
+  }
 }
 
 
 resource "waggle_placements" "bastion" {
-  count        = local.use_waggle ? 1 : 0
-  placement_id = module.waggle[0].nodes_placement_targets[0].placement
+  placement_id = module.waggle.nodes_placement_targets[0].placement
   vmid         = proxmox_virtual_environment_vm.bastion.vm_id
 
   lifecycle {
