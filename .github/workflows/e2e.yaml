@@ -1,0 +1,488 @@
+name: e2e
+
+# Reusable end-to-end job shared by test-apply and test-upgrade.
+#
+# Phase 1 (always): pre-flight nukes -> tofu apply -> AutoGlue `action_make_target`
+#                   -> cluster health check.
+# Phase 2 (only when `upgrade_to_tag` is non-empty): re-point the cluster at a newer
+#                   GlueKube tag -> tofu apply -> AutoGlue `upgrade_make_target`
+#                   -> cluster health check again.
+# Teardown (always): tofu destroy -> three nukes -> teardown verdict.
+#
+# Both applies have to live in this ONE job: examples/test keeps no remote state
+# (examples/test/versions.tf), so the state that phase 2 updates only exists in this
+# runner's working directory.
+#
+# There is deliberately NO `concurrency` block here. A called workflow's group would not
+# serialize the two CALLERS against each other, and they share one Proxmox cluster and one
+# AUTOGLUE_CLUSTER_NAME. The callers own the group; see the comment in test-apply.yaml.
+
+on:
+  workflow_call:
+    inputs:
+      gluekube_docker_tag:
+        description: "GlueKube docker tag for the first apply (empty = examples/test/variables.tf default)"
+        type: string
+        required: false
+        default: ""
+      action_make_target:
+        description: "AutoGlue action make_target to run after the first apply"
+        type: string
+        required: false
+        default: "setup"
+      upgrade_to_tag:
+        description: "GlueKube docker tag to upgrade to. Empty (the default) skips the whole upgrade phase, which is what makes this the plain apply test."
+        type: string
+        required: false
+        default: ""
+      upgrade_make_target:
+        description: "AutoGlue action make_target that performs the upgrade"
+        type: string
+        required: false
+        default: "upgrade-cluster"
+      expected_kubernetes_version:
+        description: >-
+          Kubernetes version the nodes must report after the upgrade, e.g. v1.34.5.
+          Leave empty to derive it from upgrade_to_tag by dropping the -gluekube.N
+          suffix. Set it only when the image's kubernetes_version does not match its
+          tag: the tag is a naming convention, but the authority is the GlueKube
+          image's own `ENV kubernetes_version`, which platform.json metadata can
+          override.
+        type: string
+        required: false
+        default: ""
+      job_timeout_minutes:
+        description: "Job backstop. Must cover every AutoGlue action run the caller asks for; see the callers for the arithmetic."
+        type: number
+        required: false
+        default: 90
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    # Backstop only: invoke_autoglue.sh gives up on its own at 45m with a message naming
+    # the last status. This stops a hang elsewhere from burning the 6h default.
+    timeout-minutes: ${{ inputs.job_timeout_minutes }}
+    defaults:
+      run:
+        working-directory: examples/test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1.0.8
+        with:
+          # Pinned so an OpenTofu release cannot break the nightly on a day nobody
+          # touched the code — an unpinned break presents as a module regression and
+          # costs a day of chasing the wrong cause. Bump deliberately.
+          tofu_version: "1.12.5"
+
+      # Python is no longer set up here: the nuke-* actions own actions/setup-python
+      # and install their own pinned requests, so the caller carries no Python setup.
+
+      - name: Set GlueKube docker tag
+        if: ${{ inputs.gluekube_docker_tag != '' }}
+        env:
+          TAG: ${{ inputs.gluekube_docker_tag }}
+        run: echo "TF_VAR_gluekube_docker_tag=${TAG}" >> "$GITHUB_ENV"
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          args: "--exit-node=${{ secrets.TAILSCALE_EXIT_NODE }}  --accept-dns=false"
+          tags: tag:github-actions
+      
+
+      # Pre-flight clean slate. Not continue-on-error and not always(): if we cannot
+      # prove the org and the Proxmox cluster are empty before applying, the health
+      # check downstream can pass against leftovers from a previous run instead of
+      # the cluster this run built. Failing here is cheaper than a false green.
+      - name: Pre-Nuke AutoGlue org
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          org-key: ${{ secrets.AUTOGLUE_KEY }}
+          org-secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+
+      - name: Pre-Nuke Proxmox resources
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
+      # Waggle holds the node pools and placements that decide which Proxmox host each
+      # VM lands on. A leftover pool from a previous run keeps its slot reserved, so
+      # this run's apply can fail to place — same clean-slate rationale as above.
+      - name: Pre-Nuke Waggle node pools
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-waggle@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          token: ${{ secrets.WAGGLE_API_KEY }}
+          base-url: ${{ secrets.WAGGLE_ENDPOINT }}
+          # Pool names are "<cluster-name>-<pool>-<role>" (modules/gluekube/node.tf) and
+          # "<cluster-name>-bastion" (bastion.tf), so the cluster name is the exact prefix
+          # for everything this run creates — same scoping as nuke-proxmox's cluster-name.
+          # The action's "test-" default is NOT used: it silently matches nothing (exit 0,
+          # green job, no cleanup) unless the cluster name happens to start with "test-".
+          name-prefix: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
+      - name: Tofu init
+        run: tofu init
+
+      # KEEP IN SYNC with the two identical blocks below: `Tofu apply (upgraded tag)` and
+      # `Tofu destroy`. Both re-evaluate the same provider configuration, so a variable
+      # added here and not there breaks the upgrade phase or teardown rather than apply.
+      - name: Tofu apply
+        env:
+          # verbatim (tofu parses TF_VAR_ for complex types as an HCL expression). The secret
+          # holds the whole object, so optional attributes it omits keep their type defaults.
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          # Waggle: endpoint/api_key configure the waggle provider, datacenter_id is passed
+          # through to the node pools and bastion. All three are required in practice here,
+          # since every node pool in main.tf sets waggle_slot_name.
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          # AutoGlue integration
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          # Route53 config
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+        run: tofu apply -auto-approve
+
+      - name: Invoke AutoGlue kubernetes setup
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          # inputs is empty on scheduled runs, so fall back to the dispatch default.
+          # The action guards this again internally, since GitHub does not apply an
+          # input default to a value that is present but empty.
+          action-make-target: ${{ inputs.action_make_target || 'setup' }}
+
+      - name: Check cluster health
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          # Restricts the bastion/master lookup to THIS run's cluster, so a leftover
+          # cluster from a previous run cannot be checked instead. The pre-flight
+          # nukes above are the primary isolation guarantee; this is the backstop.
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
+      ##########################################################################
+      # Upgrade phase. Every step below is gated on `upgrade_to_tag` being set,
+      # so with the input left empty this workflow is exactly the apply test.
+      #
+      # The cluster is healthy at this point; from here we change ONLY the GlueKube
+      # version and re-assert health. gluekube_docker_tag's only consumer is
+      # `docker_tag` on autoglue_cluster.cluster (cluster.tf), and the AutoGlue
+      # provider updates that attribute in place (PATCH /clusters/{id}, no
+      # RequiresReplace), so the second apply must not touch a single Proxmox VM.
+      ##########################################################################
+
+      # A same-version upgrade is a false green, not a pass: GlueKube's readme notes
+      # that `kubeadm upgrade apply` at the version already installed does not
+      # regenerate the static-pod manifests and silently no-ops. The run would then go
+      # green having upgraded nothing. Fail here instead, before spending an hour.
+      #
+      # The "from" tag is whatever the first apply actually used: the input when the
+      # caller set one, otherwise the default declared in examples/test/variables.tf.
+      # Read out of the file rather than hardcoded, so this cannot drift from the tag
+      # the apply above really used.
+      - name: Guard - upgrade target differs from the applied tag
+        if: ${{ inputs.upgrade_to_tag != '' }}
+        env:
+          FROM_INPUT: ${{ inputs.gluekube_docker_tag }}
+          TO_TAG: ${{ inputs.upgrade_to_tag }}
+          EXPECTED_VERSION_INPUT: ${{ inputs.expected_kubernetes_version }}
+        run: |
+          set -euo pipefail
+
+          from_tag="${FROM_INPUT}"
+          if [ -z "${from_tag}" ]; then
+            from_tag=$(awk '/^variable "gluekube_docker_tag"/,/^}/' variables.tf \
+              | sed -n 's/.*default[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p')
+          fi
+
+          if [ -z "${from_tag}" ]; then
+            echo "ERROR: could not determine the tag the first apply used." >&2
+            echo "No gluekube_docker_tag input was given and no 'default' could be read" >&2
+            echo "out of the gluekube_docker_tag block in examples/test/variables.tf." >&2
+            exit 1
+          fi
+
+          echo "Upgrading GlueKube: ${from_tag} -> ${TO_TAG}"
+
+          if [ "${from_tag}" = "${TO_TAG}" ]; then
+            echo "ERROR: upgrade_to_tag is the same tag the cluster was built with (${TO_TAG})." >&2
+            echo "An upgrade to the version already installed is a no-op that still reports" >&2
+            echo "success, so this run would go green without testing anything. Pick a" >&2
+            echo "different tag, or set gluekube_docker_tag to build from an older one." >&2
+            exit 1
+          fi
+
+          # The Kubernetes version the nodes must report once the upgrade lands.
+          # This is what turns "the cluster is healthy" into "the cluster is healthy
+          # AND actually upgraded" — without it a no-op upgrade passes every check.
+          #
+          # Derived from the tag by convention (v1.34.5-gluekube.33 -> v1.34.5). The
+          # real authority is the image's own `ENV kubernetes_version`, which
+          # platform.json can override, so expected_kubernetes_version exists to say
+          # it outright when an image's tag and version disagree.
+          expected_version="${EXPECTED_VERSION_INPUT}"
+          if [ -z "${expected_version}" ]; then
+            expected_version="${TO_TAG%%-gluekube.*}"
+          fi
+
+          if ! printf '%s' "${expected_version}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: could not determine the Kubernetes version to expect after the upgrade." >&2
+            echo "Derived '${expected_version}' from tag '${TO_TAG}', which is not a vX.Y.Z version." >&2
+            echo "If this image's tag does not carry its Kubernetes version, pass it directly" >&2
+            echo "with the expected_kubernetes_version input." >&2
+            exit 1
+          fi
+
+          echo "Expecting kubelet ${expected_version} on every node after the upgrade"
+          echo "EXPECTED_KUBERNETES_VERSION=${expected_version}" >> "$GITHUB_ENV"
+
+          echo "### Upgrade under test" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          echo "" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          echo "\`${from_tag}\` → \`${TO_TAG}\`" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          echo "" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          echo "Nodes must report kubelet \`${expected_version}\` afterwards." >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          echo "" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      # Overwrites the value the "Set GlueKube docker tag" step may have written: a later
+      # write to the same key wins for every step after this one, teardown included. That
+      # is intended — destroy should run against the cluster as it is now.
+      - name: Set upgraded GlueKube docker tag
+        if: ${{ inputs.upgrade_to_tag != '' }}
+        env:
+          TAG: ${{ inputs.upgrade_to_tag }}
+        run: echo "TF_VAR_gluekube_docker_tag=${TAG}" >> "$GITHUB_ENV"
+
+      # Expected plan: exactly one in-place update, on autoglue_cluster.cluster. Anything
+      # added or destroyed here means the tag bump is churning infrastructure and the
+      # upgrade being measured is not the one we think — worth checking the log for.
+      #
+      # KEEP IN SYNC with `Tofu apply` above and `Tofu destroy` below.
+      - name: Tofu apply (upgraded tag)
+        if: ${{ inputs.upgrade_to_tag != '' }}
+        env:
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+        run: tofu apply -auto-approve
+
+      # The AutoGlue action runs the image named on the cluster record, so this picks up
+      # the tag the apply above just wrote. The action is resolved by make_target against
+      # GET /admin/actions and hard-fails with "Action '<target>' not found" if the org
+      # does not expose it — that error means the AutoGlue environment, not this workflow.
+      - name: Invoke AutoGlue cluster upgrade
+        if: ${{ inputs.upgrade_to_tag != '' }}
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          # Same present-but-empty guard as the setup invocation above.
+          action-make-target: ${{ inputs.upgrade_make_target || 'upgrade-cluster' }}
+
+      # The point of the whole workflow: the cluster is still healthy AFTER the upgrade,
+      # AND it actually upgraded. Deliberately a second, independent assertion rather
+      # than trusting the pre-upgrade one — it re-derives everything from the cluster as
+      # it now is.
+      #
+      # The three extra inputs are what separate this from the pre-upgrade check. Without
+      # them the two checks would be identical, and identical checks cannot tell a
+      # successful upgrade from one that silently did nothing: both leave a cluster with
+      # Ready nodes and healthy pods.
+      - name: Check cluster health after upgrade
+        if: ${{ inputs.upgrade_to_tag != '' }}
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          # Resolved by the guard step above and exported to $GITHUB_ENV there, so the
+          # tag-to-version derivation lives in exactly one place.
+          expected-kubelet-version: ${{ env.EXPECTED_KUBERNETES_VERSION }}
+          # The upgrade cordons and drains every node in turn and uncordons it in a
+          # separate task, so a failure in between strands a node SchedulingDisabled.
+          # Nothing else in the check would notice: a cordoned node is still Ready.
+          require-schedulable: "1"
+          # kubeadm re-applies kube-proxy and CoreDNS on every upgrade. "All pods Ready"
+          # does not prove either still works; a DNS query through a ClusterIP does.
+          smoke-test: "1"
+
+      # Teardown always runs, so no run can leave the cluster behind. continue-on-error
+      # keeps a partial/failed destroy from blocking the nukes below, which are what
+      # actually guarantee cleanup here.
+      #
+      # A failed destroy does NOT fail the job. It is known to fail intermittently
+      # against this stack, and with no remote state the nukes are the teardown
+      # mechanism of record — destroy is best-effort, the nukes are the guarantee.
+      # The "Teardown verdict" step still reports the failure as a warning so it is
+      # visible rather than silent; what turns the job red is a nuke failing.
+      - name: Tofu destroy
+        id: destroy
+        continue-on-error: true
+        if: ${{ always() }}
+        # KEEP IN SYNC with the two identical blocks on `Tofu apply` above.
+        env:
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+        run: tofu destroy -auto-approve
+
+      # Backstop cleanup: delete any AutoGlue org resources left behind after destroy.
+      # always() so leftovers are still cleaned even if apply or destroy failed partway.
+      # Deliberately NOT continue-on-error: with no remote state, the nukes are the only
+      # teardown guarantee, so a nuke that fails must turn the job red on its own.
+      - name: Nuke AutoGlue org
+        id: nuke_autoglue
+        if: ${{ always() }}
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          org-key: ${{ secrets.AUTOGLUE_KEY }}
+          org-secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+
+      # Backstop cleanup: force-delete any Proxmox VMs tagged with the cluster name and
+      # any leftover cloud-init snippets. Same always() rationale as the AutoGlue nuke.
+      # The whole provider_credentials object (JSON or HCL) is passed through; the script
+      # extracts endpoint/api_token/insecure itself. Reaches Proxmox over the Tailscale
+      # exit node set up above.
+      - name: Nuke Proxmox resources
+        id: nuke_proxmox
+        if: ${{ always() }}
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
+      # Backstop cleanup: delete the Waggle node pools this run created. Same always()
+      # and no-continue-on-error rationale as the two nukes above — a pool left behind
+      # keeps its slot reserved and will block the next run's placement.
+      - name: Nuke Waggle node pools
+        id: nuke_waggle
+        if: ${{ always() }}
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-waggle@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          token: ${{ secrets.WAGGLE_API_KEY }}
+          base-url: ${{ secrets.WAGGLE_ENDPOINT }}
+          # Same prefix as the pre-flight nuke above — see the rationale there.
+          name-prefix: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
+      # Last step in the job, so every teardown path above has already run.
+      #
+      # What this step is for: teardown used to be able to fail completely while the job
+      # stayed green, and you found out from the Proxmox bill. It reports every teardown
+      # outcome into the step summary so nothing is silent.
+      #
+      # What turns the job RED is cleanup not having happened — i.e. a nuke failing.
+      # A failed `tofu destroy` on its own does NOT, because:
+      #   - it fails intermittently against this stack, and a nightly that goes red for
+      #     an expected failure trains people to ignore red, which is worse than the
+      #     failure itself;
+      #   - with no remote state (#402) the nukes are the teardown mechanism of record.
+      #     Destroy is best-effort; the nukes are the guarantee.
+      # It is still surfaced as a ::warning:: annotation, so it shows on the run without
+      # being fatal — invisible is what we were fixing, not non-fatal.
+      #
+      # The cases:
+      #   nukes ok, destroy ok      -> green, clean
+      #   nukes ok, destroy failed  -> green with a warning. Nothing is left running.
+      #   a nuke failed             -> RED. Possibly live orphaned infrastructure, and
+      #                                if destroy failed too, almost certainly.
+      #
+      # "nukes" means all three: AutoGlue, Proxmox and Waggle. Any new nuke step added
+      # above must get an `id`, `if: always()`, and a row here — a nuke that is not in
+      # this list can fail without turning the job red, which is the hole this closes.
+      - name: Teardown verdict
+        if: ${{ always() }}
+        env:
+          DESTROY: ${{ steps.destroy.outcome }}
+          NUKE_AUTOGLUE: ${{ steps.nuke_autoglue.outcome }}
+          NUKE_PROXMOX: ${{ steps.nuke_proxmox.outcome }}
+          NUKE_WAGGLE: ${{ steps.nuke_waggle.outcome }}
+        run: |
+          set -euo pipefail
+
+          # Anything that is not "success" counts as not cleaned up, including "skipped":
+          # a nuke that never ran has proved nothing about what is left behind.
+          nukes_ok=true
+          if [ "$NUKE_AUTOGLUE" != "success" ] || [ "$NUKE_PROXMOX" != "success" ] || [ "$NUKE_WAGGLE" != "success" ]; then
+            nukes_ok=false
+          fi
+
+          {
+            echo "### Teardown"
+            echo ""
+            echo "| Step | Outcome | Fails the job? |"
+            echo "| --- | --- | --- |"
+            echo "| tofu destroy | \`${DESTROY}\` | no — best-effort |"
+            echo "| nuke AutoGlue org | \`${NUKE_AUTOGLUE}\` | yes |"
+            echo "| nuke Proxmox resources | \`${NUKE_PROXMOX}\` | yes |"
+            echo "| nuke Waggle node pools | \`${NUKE_WAGGLE}\` | yes |"
+            echo ""
+          } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+          if [ "$nukes_ok" = true ]; then
+            if [ "$DESTROY" = "success" ]; then
+              echo "Teardown clean: destroy succeeded and both nukes came back empty."
+            else
+              echo "::warning title=tofu destroy did not succeed::'tofu destroy' did not succeed (outcome: ${DESTROY}), but both nukes then ran clean, so nothing should be left running. Not failing the job: destroy is best-effort here and the nukes are the teardown mechanism of record."
+              echo "Teardown completed via the nukes; 'tofu destroy' outcome was '${DESTROY}'."
+            fi
+            exit 0
+          fi
+
+          if [ "$DESTROY" != "success" ]; then
+            echo "ERROR: teardown FAILED and the nukes did not clean up after it" >&2
+            echo "(destroy: ${DESTROY}, autoglue: ${NUKE_AUTOGLUE}, proxmox: ${NUKE_PROXMOX}, waggle: ${NUKE_WAGGLE})." >&2
+            echo "There is very likely live orphaned infrastructure in Proxmox, the AutoGlue" >&2
+            echo "org and/or Waggle right now. Check all three by hand before re-running." >&2
+            exit 1
+          fi
+
+          echo "ERROR: 'tofu destroy' succeeded but a nuke did not (autoglue: ${NUKE_AUTOGLUE}, proxmox: ${NUKE_PROXMOX}, waggle: ${NUKE_WAGGLE})." >&2
+          echo "Resources the nuke could not delete may still exist. Check the failing nuke's log." >&2
+          exit 1
