@@ -1,0 +1,54 @@
+name: test-upgrade
+
+# Tests the GlueKube UPGRADE path, which test-apply does not cover: build a cluster at one
+# gluekube_docker_tag, prove it healthy, then re-point it at a newer tag and have AutoGlue
+# run `upgrade-cluster` — and prove it is still healthy afterwards.
+#
+# Dispatch only, no schedule. A run builds a cluster and then runs a second full AutoGlue
+# action against it, so it costs roughly double test-apply on shared hardware. Run it when
+# validating a GlueKube release, not nightly.
+
+on:
+  workflow_dispatch:
+    inputs:
+      gluekube_docker_tag_from:
+        description: "GlueKube docker tag to build the cluster at, i.e. upgrade FROM (defaults to examples/test/variables.tf)"
+        type: string
+        required: false
+      gluekube_docker_tag_to:
+        description: "GlueKube docker tag to upgrade TO. Must differ from the tag above."
+        type: string
+        required: true
+      expected_kubernetes_version:
+        description: "Kubernetes version nodes must report after the upgrade, e.g. v1.34.5. Leave empty to derive it from the tag above."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+# Same group as test-apply — see the rationale there. Both workflows drive the one Proxmox
+# cluster under the one AUTOGLUE_CLUSTER_NAME secret, and the pre-flight nukes delete by
+# that name, so they must queue behind each other rather than run concurrently.
+concurrency:
+  group: gluekube-e2e
+  cancel-in-progress: false
+
+jobs:
+  test-upgrade:
+    uses: ./.github/workflows/e2e.yaml
+    secrets: inherit
+    with:
+      gluekube_docker_tag: ${{ inputs.gluekube_docker_tag_from }}
+      action_make_target: setup
+      # Non-empty, so the e2e workflow's upgrade phase runs. required: true on the input
+      # above means GitHub will not let a dispatch through with this empty.
+      upgrade_to_tag: ${{ inputs.gluekube_docker_tag_to }}
+      # Empty is the normal case: the guard step derives the version from the tag.
+      expected_kubernetes_version: ${{ inputs.expected_kubernetes_version }}
+      # Two full AutoGlue action runs, not one, so test-apply's 90 does not fit:
+      #   apply ~20m + setup up to 45m + health up to 15m
+      #   + second apply (one in-place update, seconds) + upgrade-cluster up to 45m
+      #   + health up to 15m + destroy and nukes ~15m
+      # = ~155m worst case. 180 leaves headroom without hiding a hang for hours.
+      job_timeout_minutes: 180
