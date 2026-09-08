@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.7...v0.4.0) (2026-09-08)
+
+
+### Features
+
+* add test-upgrade workflow covering the GlueKube upgrade path ([#43](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/43)) ([1d5de22](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/1d5de22a5e3bda53ea035bb1b30bab9ac32fb74c))
+
 ## [0.3.7](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.6...v0.3.7) (2026-08-31)
 
 
