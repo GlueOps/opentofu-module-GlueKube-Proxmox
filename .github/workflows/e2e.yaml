@@ -7,11 +7,16 @@ name: e2e
 # Phase 2 (only when `upgrade_to_tag` is non-empty): re-point the cluster at a newer
 #                   GlueKube tag -> tofu apply -> AutoGlue `upgrade_make_target`
 #                   -> cluster health check again.
+# Phase 3 (only when `rotate_nodes` is true): replace every node pool with a fresh one,
+#                   workers then masters. Each rotation is two applies with an AutoGlue
+#                   `rotate_make_target` sync in between, then a health check. See the
+#                   phase comment in the job for why it cannot be one apply.
 # Teardown (always): tofu destroy -> three nukes -> teardown verdict.
 #
-# Both applies have to live in this ONE job: examples/test keeps no remote state
-# (examples/test/versions.tf), so the state that phase 2 updates only exists in this
-# runner's working directory.
+# Every apply has to live in this ONE job: examples/test keeps no remote state
+# (examples/test/versions.tf), so the state that phases 2 and 3 update only exists in
+# this runner's working directory. Phase 3 additionally overwrites examples/test/main.tf
+# in the checkout as it goes, which only works because it is the same runner.
 #
 # There is deliberately NO `concurrency` block here. A called workflow's group would not
 # serialize the two CALLERS against each other, and they share one Proxmox cluster and one
@@ -51,6 +56,19 @@ on:
         type: string
         required: false
         default: ""
+      rotate_nodes:
+        description: >-
+          Rotate every node pool onto a replacement pool after the health check(s).
+          False (the default) skips the whole rotation phase. See the phase comment
+          in the job below for what it proves and why each rotation is two applies.
+        type: boolean
+        required: false
+        default: false
+      rotate_make_target:
+        description: "AutoGlue action make_target that reconciles the cluster with its node pool list, run between the two applies of each rotation"
+        type: string
+        required: false
+        default: "sync"
       job_timeout_minutes:
         description: "Job backstop. Must cover every AutoGlue action run the caller asks for; see the callers for the arithmetic."
         type: number
@@ -134,9 +152,10 @@ jobs:
       - name: Tofu init
         run: tofu init
 
-      # KEEP IN SYNC with the two identical blocks below: `Tofu apply (upgraded tag)` and
-      # `Tofu destroy`. Both re-evaluate the same provider configuration, so a variable
-      # added here and not there breaks the upgrade phase or teardown rather than apply.
+      # KEEP IN SYNC with the identical blocks below: `Tofu apply (upgraded tag)`, the four
+      # `Rotate ...` steps of the rotation phase, and `Tofu destroy`. All re-evaluate the
+      # same provider configuration, so a variable added here and not there breaks a later
+      # phase or the teardown rather than this apply — i.e. an hour in, not up front.
       - name: Tofu apply
         env:
           # verbatim (tofu parses TF_VAR_ for complex types as an HCL expression). The secret
@@ -342,6 +361,275 @@ jobs:
           # does not prove either still works; a DNS query through a ClusterIP does.
           smoke-test: "1"
 
+      ##########################################################################
+      # Rotation phase. Every step below is gated on `rotate_nodes`, so with it
+      # left false this workflow is exactly the apply (or apply + upgrade) test.
+      #
+      # What this phase proves: every node pool in the cluster can be replaced by
+      # a fresh pool WITHOUT the cluster going unhealthy — the operation you need
+      # when a node image, slot size or subnet has to change and the nodes cannot
+      # be mutated in place.
+      #
+      # Why each rotation is two applies with an AutoGlue sync in between, and
+      # not one: the mechanism is the `attached` flag on a node pool
+      # (variables.tf). `attached = false` drops the pool out of
+      # autoglue_cluster_node_pools while leaving its VMs alive, and it is the
+      # SYNC that then drains those nodes out of Kubernetes. Deleting the pool
+      # from node_pools instead deletes the VMs in the same apply, before
+      # anything has drained them. So:
+      #
+      #   step-0  add the replacement pool, mark the old one attached = false
+      #   sync    AutoGlue joins the new nodes and drains the old ones out
+      #   step-1  delete the old pool outright — by now it holds no workloads
+      #   health  the cluster is still healthy on the new nodes
+      #
+      # Workers before masters, deliberately: by the time the control plane moves,
+      # every workload has already been rescheduled onto nodes that are staying,
+      # so a control-plane blip cannot coincide with a mass reschedule.
+      #
+      # The configs are checked-in files rather than generated: each step copies
+      # examples/test/rotate-*/step-N.tf over examples/test/main.tf. That keeps
+      # every intermediate cluster shape reviewable in the repo, and it keeps the
+      # rotation reproducible by hand outside CI.
+      #
+      # Teardown safety: every step-0 config is a SUPERSET of the pools that
+      # precede it, so whichever config is sitting in main.tf when a rotation step
+      # fails, the `Tofu destroy` below still covers everything this run created.
+      ##########################################################################
+
+      # Fail in seconds rather than after an hour of applies if the rotation
+      # configs have been moved or renamed out from under this workflow.
+      - name: Guard - rotation configs are present
+        if: ${{ inputs.rotate_nodes }}
+        env:
+          # Via env rather than interpolated into the script below: on a dispatch this
+          # is caller-supplied text, and a ${{ }} inside `run:` is substituted before
+          # the shell ever sees it.
+          SYNC_TARGET: ${{ inputs.rotate_make_target || 'sync' }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for f in rotate-worker-nodes/step-0.tf rotate-worker-nodes/step-1.tf \
+                   rotate-master-nodes/step-0.tf rotate-master-nodes/step-1.tf; do
+            if [ ! -f "${f}" ]; then
+              echo "ERROR: missing rotation config: examples/test/${f}" >&2
+              missing=1
+            fi
+          done
+
+          if [ "${missing}" -ne 0 ]; then
+            echo "The rotation phase copies these four files over examples/test/main.tf in" >&2
+            echo "order. Restore them, or run with rotate_nodes disabled." >&2
+            exit 1
+          fi
+
+          {
+            echo "### Node pool rotation"
+            echo ""
+            echo "Workers first, then masters. Each rotation is step-0 → \`${SYNC_TARGET}\` → step-1 → health."
+            echo ""
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      ############################ workers ####################################
+
+      # Expected plan: the five *-1 worker pools are CREATED (11 new VMs), and the
+      # five original worker pools are only updated — they drop out of
+      # autoglue_cluster_node_pools because attached is now false, but not one of
+      # their VMs is touched. A destroy in this plan means step-0.tf has drifted
+      # from main.tf in something other than `attached`, and the nodes would be
+      # deleted before the sync below could drain them.
+      #
+      # KEEP IN SYNC with the `Tofu apply` env block above.
+      - name: Rotate workers - step 0 (add replacement pools, detach the old ones)
+        if: ${{ inputs.rotate_nodes }}
+        env:
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+        run: |
+          set -euo pipefail
+          cp rotate-worker-nodes/step-0.tf main.tf
+          # Cheap parse and type check against the already-initialised providers, so a
+          # malformed step file fails here instead of somewhere inside a 20-minute apply.
+          tofu validate
+          tofu apply -auto-approve
+
+      # This is the step that actually moves the workloads: the new pools are in
+      # autoglue_cluster_node_pools and the old ones are not, so the sync joins the
+      # new nodes and cordons/drains/removes the old ones. The old VMs are still
+      # running when this finishes — deleting them is step 1's job.
+      - name: Invoke AutoGlue sync (workers)
+        if: ${{ inputs.rotate_nodes }}
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          # Same present-but-empty guard as the invocations above.
+          action-make-target: ${{ inputs.rotate_make_target || 'sync' }}
+
+      # Expected plan: the five original worker pools are DESTROYED and nothing is
+      # created. Their nodes left the cluster during the sync above, so this only
+      # reclaims VMs.
+      #
+      # KEEP IN SYNC with the `Tofu apply` env block above.
+      - name: Rotate workers - step 1 (delete the drained pools)
+        if: ${{ inputs.rotate_nodes }}
+        env:
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+        run: |
+          set -euo pipefail
+          cp rotate-worker-nodes/step-1.tf main.tf
+          tofu validate
+          tofu apply -auto-approve
+
+      # The point of the worker rotation: every workload has moved onto the *-1
+      # pools and the cluster is still healthy.
+      #
+      # require-schedulable matters more here than anywhere else in this workflow.
+      # A rotation cordons and drains on purpose, so a node left SchedulingDisabled
+      # because the drain half-finished is the exact failure this phase can produce
+      # — and nothing else in the check would see it, since a cordoned node is Ready.
+      #
+      # expected-kubelet-version is set only when the upgrade phase ran; it is empty
+      # otherwise, which the action treats as "do not assert a version". When it is
+      # set it is a real assertion: nodes built AFTER an upgrade must come up at the
+      # upgraded version, not at the image the cluster was originally built from.
+      - name: Check cluster health after worker rotation
+        if: ${{ inputs.rotate_nodes }}
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          expected-kubelet-version: ${{ env.EXPECTED_KUBERNETES_VERSION }}
+          require-schedulable: "1"
+          # Every pod in the cluster has just been rescheduled onto new nodes, and
+          # CoreDNS moved with them. Resolving a ClusterIP is the cheapest proof
+          # that DNS and kube-proxy actually followed the workloads across.
+          smoke-test: "1"
+
+      ############################ masters ####################################
+
+      # NOTE, deliberate: unlike the worker step-0, rotate-master-nodes/step-0.tf
+      # does NOT set attached = false on the outgoing master-node-pool. The old
+      # masters therefore stay cluster members through the sync, and step-1 below
+      # deletes their VMs without anything having drained them — taking 3 of 6
+      # etcd members down at once, which is one short of the 4 that six members
+      # need for quorum.
+      #
+      # That asymmetry is intentional and left in place: this phase is a test, and
+      # if the control plane cannot survive it, the run going red here is the
+      # finding. If you are copying this sequence to rotate a REAL cluster's
+      # control plane, add `"attached" : false` to the outgoing master pool in
+      # step-0 first — the node_pools validation still passes, because
+      # master-node-pool-1 is attached.
+      #
+      # KEEP IN SYNC with the `Tofu apply` env block above.
+      - name: Rotate masters - step 0 (add the replacement control-plane pool)
+        if: ${{ inputs.rotate_nodes }}
+        env:
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+        run: |
+          set -euo pipefail
+          cp rotate-master-nodes/step-0.tf main.tf
+          tofu validate
+          tofu apply -auto-approve
+
+      # Joins master-node-pool-1 to the control plane. The captain ctrp record
+      # (autoglue_record_set.cluster_record, cluster.tf) is built from every master
+      # pool's private IPs regardless of `attached`, so at this point it resolves to
+      # all six masters and clients keep reaching a working API server either way.
+      - name: Invoke AutoGlue sync (masters)
+        if: ${{ inputs.rotate_nodes }}
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          action-make-target: "rotate-master-nodes"
+
+      # Deletes the original master pool: its three VMs go away and the ctrp record
+      # narrows to the three new masters. See the NOTE on step 0 — nothing has
+      # drained these nodes, so this is the sharpest moment in the whole workflow.
+      #
+      # KEEP IN SYNC with the `Tofu apply` env block above.
+      - name: Rotate masters - step 1 (delete the original control-plane pool)
+        if: ${{ inputs.rotate_nodes }}
+        env:
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+        run: |
+          set -euo pipefail
+          cp rotate-master-nodes/step-1.tf main.tf
+          tofu validate
+          tofu apply -auto-approve
+
+      # Final verdict of the phase: not one of the nodes the cluster was built on
+      # is still in it, and the cluster is healthy, schedulable and serving DNS.
+      - name: Check cluster health after master rotation
+        if: ${{ inputs.rotate_nodes }}
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          expected-kubelet-version: ${{ env.EXPECTED_KUBERNETES_VERSION }}
+          require-schedulable: "1"
+          # kube-apiserver, etcd, kube-proxy and CoreDNS have all just moved onto
+          # new machines. A ClusterIP DNS query exercises the whole path at once.
+          smoke-test: "1"
+
       # Teardown always runs, so no run can leave the cluster behind. continue-on-error
       # keeps a partial/failed destroy from blocking the nukes below, which are what
       # actually guarantee cleanup here.
@@ -355,7 +643,7 @@ jobs:
         id: destroy
         continue-on-error: true
         if: ${{ always() }}
-        # KEEP IN SYNC with the two identical blocks on `Tofu apply` above.
+        # KEEP IN SYNC with the identical blocks on `Tofu apply` above.
         env:
           TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}

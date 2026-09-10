@@ -4,9 +4,15 @@ name: test-upgrade
 # gluekube_docker_tag, prove it healthy, then re-point it at a newer tag and have AutoGlue
 # run `upgrade-cluster` — and prove it is still healthy afterwards.
 #
-# Dispatch only, no schedule. A run builds a cluster and then runs a second full AutoGlue
-# action against it, so it costs roughly double test-apply on shared hardware. Run it when
-# validating a GlueKube release, not nightly.
+# With rotate_nodes left on (the default) it goes one further: once the upgraded cluster
+# is proved healthy, every node pool is replaced with a fresh one — workers first, then
+# masters — and health is re-asserted after each. That is the "can we move this cluster
+# onto new machines without downtime" test, run against a cluster that has just been
+# upgraded, which is when you would actually want to do it.
+#
+# Dispatch only, no schedule. A run builds a cluster and then drives up to four more
+# AutoGlue actions against it, so it costs several times test-apply on shared hardware.
+# Run it when validating a GlueKube release, not nightly.
 
 on:
   workflow_dispatch:
@@ -23,6 +29,11 @@ on:
         description: "Kubernetes version nodes must report after the upgrade, e.g. v1.34.5. Leave empty to derive it from the tag above."
         type: string
         required: false
+      rotate_nodes:
+        description: "Rotate every node pool onto a replacement pool after the upgrade (workers, then masters). Roughly doubles the run time again; untick to test the upgrade alone."
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -46,9 +57,20 @@ jobs:
       upgrade_to_tag: ${{ inputs.gluekube_docker_tag_to }}
       # Empty is the normal case: the guard step derives the version from the tag.
       expected_kubernetes_version: ${{ inputs.expected_kubernetes_version }}
-      # Two full AutoGlue action runs, not one, so test-apply's 90 does not fit:
-      #   apply ~20m + setup up to 45m + health up to 15m
-      #   + second apply (one in-place update, seconds) + upgrade-cluster up to 45m
-      #   + health up to 15m + destroy and nukes ~15m
-      # = ~155m worst case. 180 leaves headroom without hiding a hang for hours.
-      job_timeout_minutes: 180
+      # Rotation runs AFTER the post-upgrade health check, so what it exercises is
+      # node pools being replaced on an already-upgraded cluster — including the
+      # assertion that nodes built after the upgrade come up at the upgraded
+      # Kubernetes version rather than the one the cluster was originally built on.
+      rotate_nodes: ${{ inputs.rotate_nodes }}
+      # Worst-case arithmetic, since every AutoGlue action can run for its full 45m:
+      #   upgrade only  = apply ~20m + setup 45m + health 15m
+      #                 + second apply (one in-place update, seconds) + upgrade 45m
+      #                 + health 15m + destroy and nukes ~15m
+      #                 = ~155m. 180 leaves headroom without hiding a hang for hours.
+      #   with rotation = the above, plus per rotation: step-0 apply ~20m + sync 45m
+      #                 + step-1 apply ~10m + health 15m, twice = ~180m more
+      #                 = ~335m. 350 is the closest round number under GitHub's hard
+      #                   6h (360m) job ceiling, so the backstop still fires before
+      #                   GitHub kills the job — which matters, because a job GitHub
+      #                   cancels skips the teardown steps and strands live VMs.
+      job_timeout_minutes: ${{ inputs.rotate_nodes && 350 || 180 }}
