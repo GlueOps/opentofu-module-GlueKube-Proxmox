@@ -22,6 +22,7 @@ variable "gluekube_docker_tag" {
 variable "bastion" {
   description = "Bastion configuration."
   type = object({
+    create           = optional(bool, true)
     waggle_slot_name = string
   })
 }
