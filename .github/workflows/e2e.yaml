@@ -630,6 +630,40 @@ jobs:
           # new machines. A ClusterIP DNS query exercises the whole path at once.
           smoke-test: "1"
 
+      ##########################################################################
+      # Diagnostics. Runs ONLY when something above has already failed.
+      #
+      # `failure()` on a step means "an earlier step in this job failed", so this
+      # single step covers every AutoGlue invocation in the workflow — setup,
+      # upgrade-cluster and both rotation syncs — without one copy per phase.
+      #
+      # Why it is needed: invoke-autoglue polls the run record and, when the run
+      # fails, prints only `.error` from the API. That is a status, not a reason.
+      # The work itself happens inside a GlueKube container ON THE BASTION and its
+      # Ansible output never reaches the API, so a failed run used to arrive in CI
+      # as one unhelpful line.
+      #
+      # POSITION IS LOAD-BEARING: this must stay above `Tofu destroy` and the three
+      # nukes. They delete the bastion, and with it the only copy of these logs.
+      # Moving it below them turns it into a step that can never collect anything.
+      #
+      # continue-on-error AND the script's own always-exit-0 are belt and braces:
+      # the job is already red when this runs, and a diagnostic that fails on top
+      # of the failure it was meant to explain buries the real error.
+      ##########################################################################
+      - name: Collect bastion docker logs
+        if: ${{ failure() }}
+        continue-on-error: true
+        uses: ./.github/actions/collect-bastion-logs
+        with:
+          base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          api-key: ${{ secrets.AUTOGLUE_API_KEY }}
+          org-name: ${{ secrets.AUTOGLUE_ORG_NAME }}
+          # Same isolation rationale as the health checks: without it, a leftover
+          # bastion from a previous run could be read instead, and you would debug
+          # a failure that never happened.
+          cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+
       # Teardown always runs, so no run can leave the cluster behind. continue-on-error
       # keeps a partial/failed destroy from blocking the nukes below, which are what
       # actually guarantee cleanup here.
