@@ -133,18 +133,47 @@ echo ""
 # and for the same reason: an escaping mistake there becomes a baffling remote
 # failure. CONTAINER_COUNT and TAIL_LINES are integer-validated above, so building
 # the `env` prefix by hand is safe.
+#
+# Output is tee'd to a file so the ::error:: annotations the remote script emits
+# can also be copied into the job summary below. LogLevel=ERROR drops ssh's
+# "Permanently added ... to known hosts" line, which is noise in a failure log.
+OUT_FILE=$(mktemp)
+trap 'rm -f "$KEY_FILE" "$OUT_FILE"' EXIT
 ssh -i "$KEY_FILE" \
   -o StrictHostKeyChecking=no \
   -o UserKnownHostsFile=/dev/null \
+  -o LogLevel=ERROR \
   -o ConnectTimeout="${SSH_CONNECT_TIMEOUT}" \
   -o ServerAliveInterval=30 \
   -o ServerAliveCountMax=10 \
   -o BatchMode=yes \
   "${BASTION_USER}@${BASTION_IP}" \
   "sudo env CONTAINER_COUNT=${CONTAINER_COUNT} TAIL_LINES=${TAIL_LINES} bash -s" \
-  < "$REMOTE_SCRIPT"
+  < "$REMOTE_SCRIPT" | tee "$OUT_FILE"
 
-rc=$?
+rc=${PIPESTATUS[0]}
+
+# The run page's summary is the first thing anyone sees on a failed run, so the
+# cause goes there too, not only in this step's log. Only the annotation lines
+# are copied: they are already capped at a handful, whereas the full dump is
+# hundreds of lines and belongs in the log.
+#
+# The ::error:: lines only exist OUTSIDE the stop-commands blocks the remote
+# script wraps around raw container output, so a container printing "::error::"
+# itself cannot land here.
+if grep -q '^::error title=' "$OUT_FILE"; then
+  {
+    echo "### Bastion: why the AutoGlue run failed"
+    echo ""
+    echo "From the GlueKube container(s) on the bastion. Full logs are in the"
+    echo "**Collect bastion docker logs** step."
+    echo ""
+    echo '```'
+    sed -n 's/^::error title=\([^:]*\)::\(.*\)$/\1: \2/p' "$OUT_FILE" | sed 's/%25/%/g'
+    echo '```'
+    echo ""
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+fi
 if [ "$rc" -ne 0 ]; then
   # Not fatal, on purpose: see the header. Most likely the bastion never finished
   # provisioning, which is itself worth knowing and is stated rather than guessed.

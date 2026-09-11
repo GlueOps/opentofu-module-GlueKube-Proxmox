@@ -465,6 +465,17 @@ jobs:
           tofu validate
           tofu apply -auto-approve
 
+      # Give the VMs step 0 just created time to finish booting before the sync pings
+      # them. tofu reports a VM created as soon as the guest agent returns an IP, but
+      # the node cloud-init still runs package_upgrade with package_reboot_if_required,
+      # so sshd can be unreachable for a while after that. A run failed exactly this
+      # way: the sync fired ~20s after the last worker was created and its first task,
+      # `make ping-servers`, timed out on SSH to that worker. A fixed wait, not a
+      # readiness poll — cheap, and it only has to cover the boot/reboot window.
+      - name: Wait for new workers to boot before sync
+        if: ${{ inputs.rotate_nodes }}
+        run: sleep 60
+
       # This is the step that actually moves the workloads: the new pools are in
       # autoglue_cluster_node_pools and the old ones are not, so the sync joins the
       # new nodes and cordons/drains/removes the old ones. The old VMs are still
@@ -572,6 +583,17 @@ jobs:
           cp rotate-master-nodes/step-0.tf main.tf
           tofu validate
           tofu apply -auto-approve
+
+      # Give the VMs step 0 just created time to finish booting before the sync pings
+      # them. tofu reports a VM created as soon as the guest agent returns an IP, but
+      # the node cloud-init still runs package_upgrade with package_reboot_if_required,
+      # so sshd can be unreachable for a while after that. A run failed exactly this
+      # way: the sync fired ~20s after the last worker was created and its first task,
+      # `make ping-servers`, timed out on SSH to that worker. A fixed wait, not a
+      # readiness poll — cheap, and it only has to cover the boot/reboot window.
+      - name: Wait for new masters to boot before sync
+        if: ${{ inputs.rotate_nodes }}
+        run: sleep 60
 
       # Joins master-node-pool-1 to the control plane. The captain ctrp record
       # (autoglue_record_set.cluster_record, cluster.tf) is built from every master
