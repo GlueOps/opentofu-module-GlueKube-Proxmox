@@ -1,0 +1,85 @@
+name: "GlueKube: collect bastion docker logs"
+description: >-
+  Best-effort diagnostics for a failed AutoGlue action run. Resolves this run's
+  bastion through the AutoGlue API, SSHes in, and dumps `docker ps -a` plus the
+  tail of the most recent containers' logs. Never fails: it runs when the job is
+  already red, and a diagnostic that can turn into a second failure only hides
+  the first one.
+
+# Why this exists
+#
+#   invoke-autoglue polls the run record and, on failure, prints only
+#   `.error` from the API response. That is a status, not a reason: the actual
+#   work runs inside a GlueKube container ON THE BASTION, and its Ansible output
+#   — the part that says which task failed and why — never reaches the API. So a
+#   failed run showed up in CI as one unhelpful line, and finding the cause meant
+#   racing teardown to SSH into the bastion by hand.
+#
+#   This action closes that gap by reading the logs off the box while it still
+#   exists. Nothing else in the workflow can: `tofu destroy` and the three nukes
+#   delete the bastion, so the caller MUST place this before them.
+#
+# Transport is the same shape as check-cluster-health: resolve the org and the
+# cluster by name, filter /servers to this run's cluster, reveal the bastion's
+# ssh key through the API, and connect with it. Unlike that action there is no
+# second hop — the containers run on the bastion itself.
+
+inputs:
+  base-url:
+    description: "AutoGlue API base url"
+    required: true
+  api-key:
+    description: "AutoGlue API key, sent as the X-API-KEY header (secrets.AUTOGLUE_API_KEY, NOT AUTOGLUE_KEY)"
+    required: true
+  org-name:
+    description: "AutoGlue org name, resolved to an org id via /orgs"
+    required: true
+  cluster-name:
+    description: >-
+      This run's cluster name (secrets.AUTOGLUE_CLUSTER_NAME). Strongly
+      recommended: it restricts the bastion lookup to this run's cluster, so a
+      leftover bastion from a previous run cannot be read instead — which here
+      would mean debugging a failure against somebody else's logs.
+    required: false
+    default: ""
+  container-count:
+    description: >-
+      How many of the most recently created containers to dump logs for, newest
+      first. The default of 3 is deliberate rather than 1: an AutoGlue action can
+      leave behind a short-lived helper container created AFTER the one that
+      actually failed, so "the last container" is not reliably the interesting one.
+    required: false
+    default: "3"
+  tail-lines:
+    description: >-
+      Lines of log to take from the end of each container. Bounded rather than
+      the full log for two reasons: the failure message from an Ansible run is at
+      the END, and this repository is PUBLIC, so everything printed here is world
+      readable. GitHub masks values it knows are secrets, but it cannot mask
+      something the container itself decided to print.
+    required: false
+    default: "500"
+  ssh-connect-timeout:
+    description: "Seconds to wait for the SSH connection before giving up"
+    required: false
+    default: "30"
+
+runs:
+  using: composite
+  steps:
+    # Needs curl, jq and ssh locally — all preinstalled on ubuntu-latest — and
+    # reaching the bastion may require network setup (a Tailscale exit node) that
+    # the CALLER establishes before this runs.
+    - name: Collect bastion docker logs
+      shell: bash
+      env:
+        BASE_URL: ${{ inputs.base-url }}
+        API_KEY: ${{ inputs.api-key }}
+        ORG_NAME: ${{ inputs.org-name }}
+        CLUSTER_NAME: ${{ inputs.cluster-name }}
+        # `||` guards a caller forwarding a present-but-EMPTY value: `default:`
+        # only fills in for ABSENT inputs.
+        CONTAINER_COUNT: ${{ inputs.container-count || '3' }}
+        TAIL_LINES: ${{ inputs.tail-lines || '500' }}
+        SSH_CONNECT_TIMEOUT: ${{ inputs.ssh-connect-timeout || '30' }}
+      run: bash "${{ github.action_path }}/collect_bastion_logs.sh"
