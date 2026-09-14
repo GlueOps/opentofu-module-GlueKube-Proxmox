@@ -65,8 +65,8 @@ jobs:
       # Worst-case arithmetic, since every AutoGlue action can run for its full 45m:
       #   upgrade only  = apply ~20m + setup 45m + health 15m
       #                 + second apply (one in-place update, seconds) + upgrade 45m
-      #                 + health 15m + destroy and nukes ~15m
-      #                 = ~155m. 180 leaves headroom without hiding a hang for hours.
+      #                 + health 15m + destroy (capped at 20m) + nukes ~5m
+      #                 = ~165m. 180 leaves headroom without hiding a hang for hours.
       #   with rotation = the above, plus per rotation: step-0 apply ~20m + sync 45m
       #                 + step-1 apply ~10m + health 15m, twice = ~180m more
       #                 = ~335m. 350 is the closest round number under GitHub's hard

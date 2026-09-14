@@ -695,10 +695,15 @@ jobs:
       # mechanism of record — destroy is best-effort, the nukes are the guarantee.
       # The "Teardown verdict" step still reports the failure as a warning so it is
       # visible rather than silent; what turns the job red is a nuke failing.
+      #
+      # timeout-minutes turns a HUNG destroy into an ordinary failed one. Without it a
+      # hang runs into the job timeout, and GitHub cancelling the job marks it failed
+      # AND skips the nukes — the one way destroy could still fail the test.
       - name: Tofu destroy
         id: destroy
         continue-on-error: true
         if: ${{ always() }}
+        timeout-minutes: 20
         # KEEP IN SYNC with the identical blocks on `Tofu apply` above.
         env:
           TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
@@ -813,7 +818,7 @@ jobs:
             if [ "$DESTROY" = "success" ]; then
               echo "Teardown clean: destroy succeeded and both nukes came back empty."
             else
-              echo "::warning title=tofu destroy did not succeed::'tofu destroy' did not succeed (outcome: ${DESTROY}), but both nukes then ran clean, so nothing should be left running. Not failing the job: destroy is best-effort here and the nukes are the teardown mechanism of record."
+              echo "::warning title=tofu destroy did not succeed::'tofu destroy' did not succeed (outcome: ${DESTROY} — it errored or hit its 20m step timeout), but the nukes then ran clean, so nothing should be left running. Not failing the job: destroy is best-effort here and the nukes are the teardown mechanism of record."
               echo "Teardown completed via the nukes; 'tofu destroy' outcome was '${DESTROY}'."
             fi
             exit 0
