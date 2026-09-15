@@ -15,7 +15,7 @@ variable "gluekube_docker_image" {
 
 variable "gluekube_docker_tag" {
   type    = string
-  default = "v1.34.5-gluekube.33"
+  default = "v1.34.11-gluekube.2"
 }
 
 
