@@ -162,7 +162,7 @@ jobs:
         run: tofu apply -auto-approve
 
       - name: Invoke AutoGlue kubernetes setup
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@2dad38f91b6282d900df0734a3fca73507d7d69e # pre-release: GlueOps/github-actions-gluekube-e2e#8, bump to the release SHA before merging
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@0abe61d4cdea67d00dd1d01ed02a555c45a4eabf # pre-release: GlueOps/github-actions-gluekube-e2e#8, bump to the release SHA before merging
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -302,7 +302,7 @@ jobs:
       # does not expose it — that error means the AutoGlue environment, not this workflow.
       - name: Invoke AutoGlue cluster upgrade
         if: ${{ inputs.upgrade_to_tag != '' }}
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@2dad38f91b6282d900df0734a3fca73507d7d69e # pre-release: GlueOps/github-actions-gluekube-e2e#8, bump to the release SHA before merging
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@0abe61d4cdea67d00dd1d01ed02a555c45a4eabf # pre-release: GlueOps/github-actions-gluekube-e2e#8, bump to the release SHA before merging
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
