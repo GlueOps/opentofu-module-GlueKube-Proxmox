@@ -2,7 +2,7 @@ terraform {
   required_providers {
     waggle = {
       source  = "registry.terraform.io/GlueOps/waggle"
-      version = "0.1.20"
+      version = "0.1.21"
     }
   }
 }
