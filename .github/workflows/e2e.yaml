@@ -240,10 +240,7 @@ jobs:
           # This is what turns "the cluster is healthy" into "the cluster is healthy
           # AND actually upgraded" — without it a no-op upgrade passes every check.
           #
-          # Derived from the tag by convention (v1.34.5-gluekube.33 -> v1.34.5). The
-          # real authority is the image's own `ENV kubernetes_version`, which
-          # platform.json can override, so expected_kubernetes_version exists to say
-          # it outright when an image's tag and version disagree.
+
           expected_version="${EXPECTED_VERSION_INPUT}"
           if [ -z "${expected_version}" ]; then
             expected_version="${TO_TAG%%-gluekube.*}"
