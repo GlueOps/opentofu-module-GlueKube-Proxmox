@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.7...v0.4.0) (2026-09-25)
+
+
+### Features
+
+* add test-upgrade workflow covering the GlueKube upgrade path ([#43](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/43)) ([1d5de22](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/1d5de22a5e3bda53ea035bb1b30bab9ac32fb74c))
+* add worker & master nodepool rotation aftet the upgrade process ([#47](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/47)) ([ef6cb27](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/ef6cb27862217fd697993df553dc3bfe1abd1517))
+* added a toggle for the bastion ([#46](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/46)) ([c1e5da3](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/c1e5da3c891e1d607990bfcfe5f4624aae07fb54))
+
+
+### Bug Fixes
+
+* bump github-actions-gluekube-e2e to v1.1.1 to retry failed bastions ([#49](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/49)) ([89a502a](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/89a502a5952d9f5d184ce4a9cf90173cc22271d2))
+
+
+### Miscellaneous Chores
+
+* bumped the default gluekube tag version ([#48](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/48)) ([b1385df](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/b1385dfbf2b4813a7d2b6cda8ef440601266adda))
+* update to latest tag of gluekube ([#53](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/53)) ([916d764](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/916d764c14d17a500bc4055e53f58d832579105a))
+
 ## [0.3.7](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.6...v0.3.7) (2026-08-31)
 
 
