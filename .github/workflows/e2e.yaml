@@ -97,7 +97,7 @@ jobs:
           # Pinned so an OpenTofu release cannot break the nightly on a day nobody
           # touched the code — an unpinned break presents as a module regression and
           # costs a day of chasing the wrong cause. Bump deliberately.
-          tofu_version: "1.12.5"
+          tofu_version: "v1.12.6"
 
       # Python is no longer set up here: the nuke-* actions own actions/setup-python
       # and install their own pinned requests, so the caller carries no Python setup.
