@@ -479,7 +479,7 @@ jobs:
       # running when this finishes — deleting them is step 1's job.
       - name: Invoke AutoGlue sync (workers)
         if: ${{ inputs.rotate_nodes }}
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -529,7 +529,7 @@ jobs:
       # upgraded version, not at the image the cluster was originally built from.
       - name: Check cluster health after worker rotation
         if: ${{ inputs.rotate_nodes }}
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -598,7 +598,7 @@ jobs:
       # all six masters and clients keep reaching a working API server either way.
       - name: Invoke AutoGlue sync (masters)
         if: ${{ inputs.rotate_nodes }}
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -637,7 +637,7 @@ jobs:
       # is still in it, and the cluster is healthy, schedulable and serving DNS.
       - name: Check cluster health after master rotation
         if: ${{ inputs.rotate_nodes }}
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
