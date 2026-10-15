@@ -68,7 +68,9 @@ jobs:
       #                 + health 15m + destroy (capped at 20m) + nukes ~5m
       #                 = ~165m. 180 leaves headroom without hiding a hang for hours.
       #   with rotation = the above, plus per rotation: step-0 apply ~20m + sync 45m
-      #                 + step-1 apply ~10m + health 15m, twice = ~180m more
+      #                 + step-1 apply ~10m + health 15m, twice = ~180m more (the
+      #                   master rotation's extra step-0b apply is one in-place
+      #                   association update, seconds, so it does not move this)
       #                 = ~335m. 350 is the closest round number under GitHub's hard
       #                   6h (360m) job ceiling, so the backstop still fires before
       #                   GitHub kills the job — which matters, because a job GitHub

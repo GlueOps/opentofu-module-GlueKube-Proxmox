@@ -8,9 +8,11 @@ name: e2e
 #                   GlueKube tag -> tofu apply -> AutoGlue `upgrade_make_target`
 #                   -> cluster health check again.
 # Phase 3 (only when `rotate_nodes` is true): replace every node pool with a fresh one,
-#                   workers then masters. Each rotation is two applies with an AutoGlue
-#                   `rotate_make_target` sync in between, then a health check. See the
-#                   phase comment in the job for why it cannot be one apply.
+#                   workers then masters. A worker rotation is two applies with an
+#                   AutoGlue `rotate_make_target` sync in between; a master rotation is
+#                   three, because its detach cannot ride along with either of the
+#                   others. Each ends in a health check. See the phase comment in the
+#                   job for why none of it collapses into one apply.
 # Teardown (always): tofu destroy -> three nukes -> teardown verdict.
 #
 # Every apply has to live in this ONE job: examples/test keeps no remote state
@@ -408,7 +410,8 @@ jobs:
 
           missing=0
           for f in rotate-worker-nodes/step-0.tf rotate-worker-nodes/step-1.tf \
-                   rotate-master-nodes/step-0.tf rotate-master-nodes/step-1.tf; do
+                   rotate-master-nodes/step-0.tf rotate-master-nodes/step-0-detach.tf \
+                   rotate-master-nodes/step-1.tf; do
             if [ ! -f "${f}" ]; then
               echo "ERROR: missing rotation config: examples/test/${f}" >&2
               missing=1
@@ -416,7 +419,7 @@ jobs:
           done
 
           if [ "${missing}" -ne 0 ]; then
-            echo "The rotation phase copies these four files over examples/test/main.tf in" >&2
+            echo "The rotation phase copies these five files over examples/test/main.tf in" >&2
             echo "order. Restore them, or run with rotate_nodes disabled." >&2
             exit 1
           fi
@@ -424,7 +427,8 @@ jobs:
           {
             echo "### Node pool rotation"
             echo ""
-            echo "Workers first, then masters. Each rotation is step-0 → \`${SYNC_TARGET}\` → step-1 → health."
+            echo "Workers first, then masters. A worker rotation is step-0 → \`${SYNC_TARGET}\` → step-1 → health;"
+            echo "a master rotation is step-0 → \`rotate-master-nodes\` → step-0-detach → step-1 → health."
             echo ""
           } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
@@ -553,10 +557,18 @@ jobs:
       #
       # That asymmetry is intentional and left in place: this phase is a test, and
       # if the control plane cannot survive it, the run going red here is the
-      # finding. If you are copying this sequence to rotate a REAL cluster's
-      # control plane, add `"attached" : false` to the outgoing master pool in
-      # step-0 first — the node_pools validation still passes, because
-      # master-node-pool-1 is attached.
+      # finding.
+      #
+      # It is also load-bearing, which is why the worker step-0's `"attached" : false`
+      # cannot simply be copied onto the outgoing master pool here. AutoGlue builds
+      # platform.json from the pools ATTACHED to the cluster, GlueKube's parser.py
+      # builds the inventory's `masters` group from that, and `rotate-master-nodes`
+      # runs `hosts: masters`, elects an orchestrator from the group and reads the
+      # cluster with kubectl from it. Detach the outgoing pool before the sync and
+      # the inventory holds only the three NEW masters, none of which has joined
+      # yet — there is no joined master left to orchestrate from, and the rotation
+      # has nothing to diff against. So the outgoing pool stays attached here and is
+      # detached in step 0b below, once the sync has done its work.
       #
       # KEEP IN SYNC with the `Tofu apply` env block above.
       - name: Rotate masters - step 0 (add the replacement control-plane pool)
@@ -606,8 +618,61 @@ jobs:
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
           action-make-target: "rotate-master-nodes"
 
+      # The detach, on its own, and the reason a master rotation needs a third apply.
+      #
+      # step-1 below drops master-node-pool from the config outright, which asks one
+      # apply to do two things: take the pool's id out of autoglue_cluster_node_pools
+      # (an UPDATE — DELETE /clusters/<cluster>/node-pools/<pool>) and delete the pool
+      # itself. The pool lives in a module instance that the same apply removes from
+      # for_each, and OpenTofu does not reliably order the association's update ahead
+      # of an orphaned instance's destroy: the dependency runs through an output that
+      # disappears with the instance. When the delete wins the race the detach fails
+      # with
+      #   autoglue API error 404: {"code":"nodepool_not_found", ...}
+      # because AutoGlue's detach handler looks the node pool up in the org before it
+      # touches the attachment, so a pool it has already deleted can never be detached
+      # (DetachNodePool in GlueOps/autoglue). Worse, by then there is nothing left to
+      # detach: cluster_node_pools is a join table with OnDelete:CASCADE and node pools
+      # are hard-deleted, so deleting the pool already took the attachment with it. The
+      # apply fails AFTER the VMs are gone, and the phase never reaches its health
+      # check — all over a row the database had already cleaned up.
+      #
+      # Detaching here, while the pool still exists, makes step-1 a pure delete that
+      # leaves autoglue_cluster_node_pools untouched — the same shape the worker
+      # rotation already gets from `attached = false` in its step-0. It cannot move any
+      # earlier than this; see the NOTE on step 0.
+      #
+      # step-0-detach.tf differs from step-0.tf by exactly one line, `"attached" : false`
+      # on master-node-pool. No VM is touched: `attached` only feeds the association.
+      # Expected plan: one in-place update of autoglue_cluster_node_pools, nothing else.
+      #
+      # KEEP IN SYNC with the `Tofu apply` env block above.
+      - name: Rotate masters - step 0b (detach the rotated-out pool)
+        if: ${{ inputs.rotate_nodes }}
+        env:
+          TF_VAR_provider_credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
+          TF_VAR_waggle_endpoint: ${{ secrets.WAGGLE_ENDPOINT }}
+          TF_VAR_waggle_api_key: ${{ secrets.WAGGLE_API_KEY }}
+          TF_VAR_waggle_datacenter_id: ${{ secrets.WAGGLE_DATACENTER_ID }}
+          TF_VAR_autoglue_cluster_name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
+          TF_VAR_autoglue_key: ${{ secrets.AUTOGLUE_KEY }}
+          TF_VAR_autoglue_org_secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
+          TF_VAR_autoglue_base_url: ${{ secrets.AUTOGLUE_BASE_URL }}
+          TF_VAR_route53_aws_access_key_id: ${{ secrets.ROUTE53_AWS_ACCESS_KEY_ID }}
+          TF_VAR_route53_aws_secret_access_key: ${{ secrets.ROUTE53_AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
+        run: |
+          set -euo pipefail
+          cp rotate-master-nodes/step-0-detach.tf main.tf
+          tofu validate
+          tofu apply -auto-approve
+
       # Deletes the original master pool: its three VMs go away and the ctrp record
-      # narrows to the three new masters. See the NOTE on step 0 — nothing has
+      # narrows to the three new masters. Step 0b already took the pool out of
+      # autoglue_cluster_node_pools, so the expected plan here is destroys only, with
+      # no update to the association. See the NOTE on step 0 — nothing has
       # drained these nodes, so this is the sharpest moment in the whole workflow.
       #
       # KEEP IN SYNC with the `Tofu apply` env block above.
@@ -682,7 +747,33 @@ jobs:
           TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
           TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
           TF_VAR_autoglue_credential_id: ${{ secrets.AUTOGLUE_CREDENTIAL_ID }}
-        run: tofu destroy -auto-approve
+        # Retried once without the cluster/node-pool association, because of the same
+        # AutoGlue detach asymmetry that step 0b above works around. The association's
+        # Delete walks every pool id in state and aborts on the first error, and it runs
+        # early — the node pools cannot be destroyed until it has. So one pool AutoGlue
+        # no longer has — 404 nodepool_not_found — aborts the destroy with nearly every
+        # VM still running, leaving all ~22 to the Proxmox nuke to force-delete.
+        # Forgetting the association skips those detaches and nothing is orphaned by it:
+        # cluster_node_pools rows cascade away with the pools and the cluster, both of
+        # which the retry still destroys.
+        #
+        # Both attempts share the 20m step budget above. No `set -e`: the first destroy
+        # is expected to be able to fail, and the retry's exit code is the step's.
+        run: |
+          set -uo pipefail
+
+          if tofu destroy -auto-approve; then
+            exit 0
+          fi
+
+          assoc=module.captain.autoglue_cluster_node_pools.autoglue_cluster_node_pools
+          if ! tofu state list | grep -qxF "${assoc}"; then
+            exit 1
+          fi
+
+          echo "::warning title=retrying tofu destroy::'tofu destroy' failed. Forgetting ${assoc} and retrying, so the VMs are reclaimed by OpenTofu rather than left to the nukes."
+          tofu state rm "${assoc}"
+          tofu destroy -auto-approve
 
       # Backstop cleanup: delete any AutoGlue org resources left behind after destroy.
       # always() so leftovers are still cleaned even if apply or destroy failed partway.
