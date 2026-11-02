@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.4.0...v0.4.1) (2026-11-02)
+
+
+### Miscellaneous Chores
+
+* drop config:recommended from renovate.json ([#62](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/62)) ([e9cb05f](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/e9cb05f35b4a22a0e69351c02bd29552a6e1f0ec))
+
 ## [0.4.0](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.7...v0.4.0) (2026-10-16)
 
 
