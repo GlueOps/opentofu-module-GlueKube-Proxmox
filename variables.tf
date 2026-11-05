@@ -4,7 +4,7 @@ variable "provider_credentials" {
     endpoint    = string
     api_token   = optional(string)
     insecure    = optional(bool, false)
-    private_key = optional(string)
+    private_key = optional(string) # SSH key for root on the PVE nodes; only needed while a pool or the bastion uses cloud_init = "snippet"
   })
 }
 
@@ -24,7 +24,15 @@ variable "bastion" {
   type = object({
     create           = optional(bool, true)
     waggle_slot_name = string
+    # "snippet" (cicustom snippet, needs provider_credentials.private_key) or "iso" (proxmox_cloudinit_bootstrap).
+    # To change it, also replace the bastion (-replace on its proxmox_virtual_environment_vm).
+    cloud_init = optional(string, "snippet")
   })
+
+  validation {
+    condition     = contains(["snippet", "iso"], var.bastion.cloud_init)
+    error_message = "bastion.cloud_init must be either 'snippet' or 'iso'."
+  }
 }
 
 variable "autoglue" {
@@ -81,7 +89,9 @@ variable "node_pools" {
     }))
     attached         = optional(bool, true)
     waggle_slot_name = string
-
+    # "snippet" (cicustom snippet, needs provider_credentials.private_key) or "iso" (proxmox_cloudinit_bootstrap).
+    # Set it when the pool is created: to change it, rotate to a new pool.
+    cloud_init = optional(string, "snippet")
   }))
 
   validation {
@@ -97,6 +107,11 @@ variable "node_pools" {
   validation {
     condition     = alltrue([for np in var.node_pools : contains(["public", "private"], np.subnet)])
     error_message = "Each node pool subnet must be either 'public' or 'private'."
+  }
+
+  validation {
+    condition     = alltrue([for np in var.node_pools : contains(["snippet", "iso"], np.cloud_init)])
+    error_message = "Each node pool cloud_init must be either 'snippet' or 'iso'."
   }
 
 }
