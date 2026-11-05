@@ -17,7 +17,7 @@ resource "autoglue_server" "node" {
 
   lifecycle {
     precondition {
-      # A pool's VMs are bootstrapped once, so switching a running pool between snippet and iso would break them.
+      # initialization is in ignore_changes, so for an existing VM this reflects how it was created; a running VM can't switch.
       condition     = length(proxmox_virtual_environment_vm.cluster_node[each.key].initialization) == (local.iso ? 0 : 1)
       error_message = "Node pool ${var.name} was created with the other cloud_init setting. Rotate to a new pool instead of changing it."
     }

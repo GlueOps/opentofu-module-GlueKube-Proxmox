@@ -19,15 +19,10 @@ provider "proxmox" {
   endpoint  = var.provider_credentials.endpoint
   api_token = var.provider_credentials.api_token
   insecure  = var.provider_credentials.insecure
-
-  # Only cloud_init = "snippet" uploads over SSH.
-  dynamic "ssh" {
-    for_each = var.provider_credentials.private_key == null ? [] : [1]
-    content {
-      agent       = false
-      username    = "root"
-      private_key = var.provider_credentials.private_key
-    }
+  ssh {
+    agent       = false
+    username    = "root"
+    private_key = var.provider_credentials.private_key
   }
 }
 

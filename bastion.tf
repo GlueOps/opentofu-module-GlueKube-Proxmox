@@ -50,6 +50,10 @@ resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
     })
     file_name = "${var.autoglue.autoglue_cluster_name}-bastion-cloud-init.yaml"
   }
+
+  lifecycle {
+    ignore_changes = [node_name]
+  }
 }
 
 resource "proxmox_virtual_environment_vm" "bastion" {
@@ -155,7 +159,7 @@ resource "proxmox_cloudinit_bootstrap" "bastion" {
 
   network_config = yamlencode({
     version = 1
-    # MACs come from Proxmox, so a replaced VM gets a new MAC and a new DHCP lease.
+    # Names the NICs eth0/eth1 (the IP lookups rely on it) and runs DHCP on each; without `initialization`, Proxmox generates no network config.
     config = [for n, nic in proxmox_virtual_environment_vm.bastion[0].network_device : {
       type        = "physical"
       name        = "eth${n}"
@@ -182,20 +186,28 @@ resource "waggle_placements" "bastion" {
 }
 
 
+locals {
+  # Interface name => IPv4 addresses, from the bootstrap ("iso") or from the VM's guest agent ("snippet").
+  bastion_ipv4 = [for i, vm in proxmox_virtual_environment_vm.bastion : local.bastion_iso ? proxmox_cloudinit_bootstrap.bastion[i].ipv4_addresses : zipmap(
+    vm.network_interface_names,
+    vm.ipv4_addresses,
+  )]
+}
+
 resource "autoglue_server" "bastion" {
   count = local.bastion_count
 
   depends_on         = [proxmox_virtual_environment_vm.bastion]
   hostname           = "bastion"
-  private_ip_address = local.bastion_iso ? proxmox_cloudinit_bootstrap.bastion[0].ipv4_addresses["eth0"][0] : proxmox_virtual_environment_vm.bastion[0].ipv4_addresses[1][0]
-  public_ip_address  = local.bastion_iso ? proxmox_cloudinit_bootstrap.bastion[0].ipv4_addresses["eth1"][0] : proxmox_virtual_environment_vm.bastion[0].ipv4_addresses[2][0]
+  private_ip_address = local.bastion_ipv4[0]["eth0"][0]
+  public_ip_address  = local.bastion_ipv4[0]["eth1"][0]
   role               = "bastion"
   ssh_key_id         = autoglue_ssh_key.bastion[0].id
   ssh_user           = "cluster"
 
   lifecycle {
     precondition {
-      # The bastion is bootstrapped once, so switching it between snippet and iso in place would break it.
+      # initialization is in ignore_changes, so for an existing VM this reflects how it was created; a running VM can't switch.
       condition     = length(proxmox_virtual_environment_vm.bastion[0].initialization) == (local.bastion_iso ? 0 : 1)
       error_message = "The bastion was created with the other cloud_init setting. Replace it: tofu apply -replace='<module address>.proxmox_virtual_environment_vm.bastion[0]'."
     }

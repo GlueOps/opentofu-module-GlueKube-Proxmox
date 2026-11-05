@@ -166,7 +166,7 @@ resource "proxmox_cloudinit_bootstrap" "node" {
 
   network_config = yamlencode({
     version = 1
-    # MACs come from Proxmox, so a replaced VM gets a new MAC and a new DHCP lease.
+    # Names the NICs eth0/eth1 (the IP lookups rely on it) and runs DHCP on each; without `initialization`, Proxmox generates no network config.
     config = [for n, nic in proxmox_virtual_environment_vm.cluster_node[each.key].network_device : {
       type        = "physical"
       name        = "eth${n}"
