@@ -80,3 +80,9 @@ variable "captain_domain" {
   type        = string
   description = "The cluster's captain domain. Used to derive a deterministic, per-cluster Proxmox vm_id prefix."
 }
+
+variable "cloud_init" {
+  type        = string
+  description = "\"snippet\" or \"iso\"; see node_pools in the root module."
+  default     = "snippet"
+}

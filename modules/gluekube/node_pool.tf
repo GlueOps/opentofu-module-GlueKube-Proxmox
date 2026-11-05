@@ -1,17 +1,27 @@
+locals {
+  # Interface name => IPv4 addresses, from the bootstrap ("iso") or from the VM's guest agent ("snippet").
+  node_ipv4 = { for k in local.nodes : k => local.iso ? proxmox_cloudinit_bootstrap.node[k].ipv4_addresses : zipmap(
+    proxmox_virtual_environment_vm.cluster_node[k].network_interface_names,
+    proxmox_virtual_environment_vm.cluster_node[k].ipv4_addresses,
+  ) }
+}
+
 resource "autoglue_server" "node" {
-  for_each = toset([for i in range(0, var.node_count) : tostring(i)])
-  hostname = "${var.role}-${var.name}-${each.key}"
-  private_ip_address = proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[
-    index(proxmox_virtual_environment_vm.cluster_node[each.key].network_interface_names, "eth0")
-  ][0]
-  public_ip_address = var.subnet == "public" ? proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[
-    index(proxmox_virtual_environment_vm.cluster_node[each.key].network_interface_names, "eth1")
-    ][0] : proxmox_virtual_environment_vm.cluster_node[each.key].ipv4_addresses[
-    index(proxmox_virtual_environment_vm.cluster_node[each.key].network_interface_names, "eth0")
-  ][0]
-  role       = var.role
-  ssh_key_id = autoglue_ssh_key.ssh_key.id
-  ssh_user   = "cluster"
+  for_each           = local.nodes
+  hostname           = "${var.role}-${var.name}-${each.key}"
+  private_ip_address = local.node_ipv4[each.key]["eth0"][0]
+  public_ip_address  = local.node_ipv4[each.key][var.subnet == "public" ? "eth1" : "eth0"][0]
+  role               = var.role
+  ssh_key_id         = autoglue_ssh_key.ssh_key.id
+  ssh_user           = "cluster"
+
+  lifecycle {
+    precondition {
+      # initialization is in ignore_changes, so for an existing VM this reflects how it was created; a running VM can't switch.
+      condition     = length(proxmox_virtual_environment_vm.cluster_node[each.key].initialization) == (local.iso ? 0 : 1)
+      error_message = "Node pool ${var.name} was created with the other cloud_init setting. Rotate to a new pool instead of changing it."
+    }
+  }
 }
 
 
