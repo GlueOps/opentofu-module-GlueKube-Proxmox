@@ -124,7 +124,7 @@ jobs:
       # check downstream can pass against leftovers from a previous run instead of
       # the cluster this run built. Failing here is cheaper than a false green.
       - name: Pre-Nuke AutoGlue org
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           org-key: ${{ secrets.AUTOGLUE_KEY }}
@@ -140,7 +140,7 @@ jobs:
       # VM lands on. A leftover pool from a previous run keeps its slot reserved, so
       # this run's apply can fail to place — same clean-slate rationale as above.
       - name: Pre-Nuke Waggle node pools
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-waggle@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-waggle@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           token: ${{ secrets.WAGGLE_API_KEY }}
           base-url: ${{ secrets.WAGGLE_ENDPOINT }}
@@ -183,7 +183,7 @@ jobs:
         run: tofu apply -auto-approve
 
       - name: Invoke AutoGlue kubernetes setup
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -195,7 +195,7 @@ jobs:
           action-make-target: ${{ inputs.action_make_target || 'setup' }}
 
       - name: Check cluster health
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -323,7 +323,7 @@ jobs:
       # does not expose it — that error means the AutoGlue environment, not this workflow.
       - name: Invoke AutoGlue cluster upgrade
         if: ${{ inputs.upgrade_to_tag != '' }}
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -343,7 +343,7 @@ jobs:
       # Ready nodes and healthy pods.
       - name: Check cluster health after upgrade
         if: ${{ inputs.upgrade_to_tag != '' }}
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -483,7 +483,7 @@ jobs:
       # running when this finishes — deleting them is step 1's job.
       - name: Invoke AutoGlue sync (workers)
         if: ${{ inputs.rotate_nodes }}
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -533,7 +533,7 @@ jobs:
       # upgraded version, not at the image the cluster was originally built from.
       - name: Check cluster health after worker rotation
         if: ${{ inputs.rotate_nodes }}
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -610,7 +610,7 @@ jobs:
       # all six masters and clients keep reaching a working API server either way.
       - name: Invoke AutoGlue sync (masters)
         if: ${{ inputs.rotate_nodes }}
-        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        uses: GlueOps/github-actions-gluekube-e2e/invoke-autoglue@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -702,7 +702,7 @@ jobs:
       # is still in it, and the cluster is healthy, schedulable and serving DNS.
       - name: Check cluster health after master rotation
         if: ${{ inputs.rotate_nodes }}
-        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@16a962eadb97606be06222d7e313aba9d3215286 # v1.1.0
+        uses: GlueOps/github-actions-gluekube-e2e/check-cluster-health@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           api-key: ${{ secrets.AUTOGLUE_API_KEY }}
@@ -782,7 +782,7 @@ jobs:
       - name: Nuke AutoGlue org
         id: nuke_autoglue
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-autoglue@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           base-url: ${{ secrets.AUTOGLUE_BASE_URL }}
           org-key: ${{ secrets.AUTOGLUE_KEY }}
@@ -807,7 +807,7 @@ jobs:
       - name: Nuke Waggle node pools
         id: nuke_waggle
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-waggle@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-waggle@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           token: ${{ secrets.WAGGLE_API_KEY }}
           base-url: ${{ secrets.WAGGLE_ENDPOINT }}
