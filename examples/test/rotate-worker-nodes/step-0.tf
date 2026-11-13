@@ -3,7 +3,8 @@ module "captain" {
   gluekube_docker_image = var.gluekube_docker_image
   gluekube_docker_tag   = var.gluekube_docker_tag
 
-  provider_credentials = var.provider_credentials
+  # The e2e secret may still carry private_key, which 0.6.0 rejects; the module no longer uses SSH.
+  provider_credentials = merge(var.provider_credentials, { private_key = null })
 
   waggle_endpoint      = var.waggle_endpoint
   waggle_api_key       = var.waggle_api_key
@@ -36,7 +37,6 @@ module "captain" {
 
   bastion = {
     waggle_slot_name = "medium"
-    cloud_init       = "iso"
   }
 
   autoglue = {
@@ -158,7 +158,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "glueops-platform-node-pool-1",
-      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 3,
       "kubernetes_labels" : {
@@ -176,7 +175,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "clusterwide-1",
-      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 2,
       "kubernetes_labels" : {},
@@ -187,7 +185,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "public-loadbalancer-node-pool-1",
-      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -205,7 +202,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "platform-loadbalancer-node-pool-1",
-      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -223,7 +219,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "nginx-loadbalancer-node-pool-1",
-      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {

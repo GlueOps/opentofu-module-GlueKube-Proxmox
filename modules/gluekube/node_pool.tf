@@ -1,25 +1,17 @@
-locals {
-  # Interface name => IPv4 addresses, from the bootstrap ("iso") or from the VM's guest agent ("snippet").
-  node_ipv4 = { for k in local.nodes : k => local.iso ? proxmox_cloudinit_bootstrap.node[k].ipv4_addresses : zipmap(
-    proxmox_virtual_environment_vm.cluster_node[k].network_interface_names,
-    proxmox_virtual_environment_vm.cluster_node[k].ipv4_addresses,
-  ) }
-}
-
 resource "autoglue_server" "node" {
   for_each           = local.nodes
   hostname           = "${var.role}-${var.name}-${each.key}"
-  private_ip_address = local.node_ipv4[each.key]["eth0"][0]
-  public_ip_address  = local.node_ipv4[each.key][var.subnet == "public" ? "eth1" : "eth0"][0]
+  private_ip_address = proxmox_cloudinit_bootstrap.node[each.key].ipv4_addresses["eth0"][0]
+  public_ip_address  = proxmox_cloudinit_bootstrap.node[each.key].ipv4_addresses[var.subnet == "public" ? "eth1" : "eth0"][0]
   role               = var.role
   ssh_key_id         = autoglue_ssh_key.ssh_key.id
   ssh_user           = "cluster"
 
   lifecycle {
     precondition {
-      # initialization is in ignore_changes, so for an existing VM this reflects how it was created; a running VM can't switch.
-      condition     = length(proxmox_virtual_environment_vm.cluster_node[each.key].initialization) == (local.iso ? 0 : 1)
-      error_message = "Node pool ${var.name} was created with the other cloud_init setting. Rotate to a new pool instead of changing it."
+      # initialization is in ignore_changes, so this shows how the VM was created: a cloud-init drive means snippet mode.
+      condition     = length(proxmox_virtual_environment_vm.cluster_node[each.key].initialization) == 0
+      error_message = "Node pool ${var.name} still uses cloud-init snippets, which 0.6.0 removed. Go back to 0.5.x and rotate it onto cloud_init = \"iso\" first (see its upgrade guide)."
     }
   }
 }

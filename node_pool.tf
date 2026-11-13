@@ -13,7 +13,6 @@ module "node_pool" {
   proxmox_config         = var.proxmox_config
   waggle_datacenter_id   = var.waggle_datacenter_id
   waggle_slot_name       = each.value.waggle_slot_name
-  cloud_init             = each.value.cloud_init
   captain_domain         = var.autoglue.route_53_config.domain_name
 }
 

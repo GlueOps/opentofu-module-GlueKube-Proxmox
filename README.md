@@ -43,7 +43,6 @@ module "captain" {
 
   bastion = {
     waggle_slot_name = "medium"
-    cloud_init       = "iso"
   }
 
   autoglue = {
@@ -66,7 +65,6 @@ module "captain" {
   node_pools = [
 {
       "name" : "master-node-pool",
-      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 3,
       "role" : "master",
@@ -77,7 +75,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "glueops-platform-node-pool",
-      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 3,
       "kubernetes_labels" : {
@@ -95,7 +92,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "clusterwide",
-      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 2,
       "kubernetes_labels" : {},
@@ -106,7 +102,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "public-loadbalancer-node-pool",
-      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -124,7 +119,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "platform-loadbalancer-node-pool",
-      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -142,7 +136,6 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "nginx-loadbalancer-node-pool",
-      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -161,24 +154,15 @@ module "captain" {
 }
 ```
 
-## Cloud-init: `snippet` or `iso`
+## Cloud-init
 
-Each node pool and the bastion has a `cloud_init` setting:
+Every node and the bastion boot from a temporary seed ISO: the module attaches it through the Proxmox API, starts the
+VM, waits for cloud-init to finish, then deletes the ISO. It needs no SSH to the Proxmox nodes and leaves nothing on
+them, so VMs can migrate freely. The ISO goes on the `local` datastore, which must have the `iso` content type, as
+`<cluster>-<role>-<pool>-<index>-cloud-init.iso` (the bastion's is `<cluster>-bastion-cloud-init.iso`), so node
+pool names may only use letters, digits, `.`, `_` and `-`.
 
-- **`"snippet"`** (the default) writes a cloud-init snippet to the node over SSH. It needs
-  `provider_credentials.private_key`, and the snippet stays on node-local storage.
-- **`"iso"`** attaches a temporary seed ISO through the Proxmox API, starts the VM, waits for cloud-init
-  to finish, then deletes the ISO. It needs no SSH and leaves nothing on the node. The ISO goes on the `local`
-  datastore, which must have the `iso` content type, as `<cluster>-<role>-<pool>-<index>-cloud-init.iso` (the
-  bastion's is `<cluster>-bastion-cloud-init.iso`), so a pool on `"iso"` needs a name of only letters, digits, `.`,
-  `_` and `-`.
-
-New clusters should set `cloud_init = "iso"` on every node pool and on the bastion, and leave out `private_key`.
-
-A pool's setting is fixed once it exists: changing it on a running pool fails the plan. To move a pool, rotate it
-onto a new one. To move the bastion, disable it and enable it again with the new setting (see step 4 below).
-
-**API token privileges for `iso`.** On top of what snippet mode needs, the token needs:
+**API token privileges.** The token needs:
 - `Datastore.AllocateTemplate`, `Datastore.Allocate` and `Datastore.Audit` on `/storage/local`, to upload, delete and
   list the seed ISO;
 - `VM.Config.CDROM`, `VM.PowerMgmt` and `VM.GuestAgent.FileRead` on the VMs, to attach the ISO, start the VM and read
@@ -195,35 +179,18 @@ tofu apply -replace='module.<name>.proxmox_virtual_environment_vm.bastion[0]'   
 ```
 `tofu state list | grep cluster_node` shows the node addresses.
 
-## Upgrading from 0.4.x to 0.5.0
+## Upgrading from 0.5.x to 0.6.0
 
-0.5.0 moves from `bpg/proxmox` to `GlueOps/proxmox` 0.1.0 and adds `cloud_init = "iso"`. A later release removes the
-`"snippet"` mode and `private_key`, so finish all these steps on 0.5.0 before upgrading further.
+0.6.0 removes the `"snippet"` mode: `cloud_init` on the node pools and the bastion, and
+`provider_credentials.private_key`, are gone. Before upgrading, every pool and the bastion must already run on
+`cloud_init = "iso"` with `private_key` removed: follow the 0.5.x upgrade guide (in the v0.5 README) to the end.
 
-Run `tofu plan` after each step. Every step must end with a plan that shows no changes before you start the next.
+1. Delete every `cloud_init` line from `node_pools` and `bastion`, and `private_key` from `provider_credentials`.
+   The plan fails with a "removed in 0.6.0" message until they're gone.
+2. Point `source` at `v0.6.0` and run `tofu init -upgrade`. The plan should show no changes.
 
-1. **Switch the provider.** Run:
-   ```sh
-   tofu state replace-provider registry.opentofu.org/bpg/proxmox registry.terraform.io/glueops/proxmox
-   ```
-   Point `source` at `v0.5.0` and run `tofu init -upgrade`. The plan should show no changes. If your root module
-   declares `bpg/proxmox` only for this module, remove it. Keep it if your root manages its own `proxmox_*`
-   resources.
-2. **Rotate the worker pools.** For each worker pool, add a new pool with a new name and `cloud_init = "iso"`, and
-   set `attached = false` on the old pool. Apply, then run AutoGlue's `sync` action, which joins the new nodes and
-   drains the old ones. Once the new nodes are `Ready` and the old ones have left the cluster, delete the old pool
-   from your config and apply.
-3. **Rotate the master pools.** Add the new pool with `cloud_init = "iso"` and keep the old one attached: AutoGlue's
-   `rotate-master-nodes` needs a joined master in its inventory. Apply, then run `rotate-master-nodes`. Set
-   `attached = false` on the old pool and apply. Before you delete it, check that the old masters have left both
-   Kubernetes and the etcd member list: deleting master VMs that are still etcd members can cost the cluster quorum.
-   Then delete the old pool and apply.
-4. **Move the bastion.** Set `bastion.create = false` and apply: the bastion and its AutoGlue registration are
-   deleted. Then set `bastion.create = true` and `bastion.cloud_init = "iso"` and apply: a new bastion is built from
-   the ISO and registered. Do both applies back to back: AutoGlue actions that go through the bastion, such as
-   `sync`, can't run while it's gone. Kubernetes keeps running.
-5. **Drop the SSH key.** Once no pool and not the bastion uses `"snippet"`, remove `private_key` from
-   `provider_credentials`. The plan should show no changes.
+If the plan says a pool or the bastion "still uses cloud-init snippets", it was never moved to `"iso"`: go back to
+0.5.x and finish its upgrade guide first. Coming from 0.4.x, upgrade to 0.5.x first.
 
 ## Requirements
 
@@ -263,7 +230,6 @@ Run `tofu plan` after each step. Every step must end with a plan that shows no c
 | autoglue_server.bastion | resource |
 | autoglue_ssh_key.bastion | resource |
 | proxmox_cloudinit_bootstrap.bastion | resource |
-| proxmox_virtual_environment_file.bastion_cloud_init | resource |
 | proxmox_virtual_environment_vm.bastion | resource |
 | waggle_placements.bastion | resource |
 | waggle_slots.available_slots | data source |
@@ -273,12 +239,12 @@ Run `tofu plan` after each step. Every step must end with a plan that shows no c
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_autoglue"></a> [autoglue](#input\_autoglue) | Configuration for the AutoGlue platform integration, including cluster naming, credentials, and Route53 DNS settings. | <pre>object({<br/>    autoglue_cluster_name = string<br/><br/>    credentials = object({<br/>      autoglue_key        = string<br/>      autoglue_org_secret = string<br/>      base_url            = string<br/>    })<br/><br/>    route_53_config = object({<br/>      aws_region    = string<br/>      domain_name   = string<br/>      zone_id       = string<br/>      credential_id = string<br/>    })<br/>  })</pre> | n/a | yes |
-| <a name="input_bastion"></a> [bastion](#input\_bastion) | Bastion configuration. | <pre>object({<br/>    create           = optional(bool, true)<br/>    waggle_slot_name = string<br/>    # "snippet" (cicustom snippet, needs provider_credentials.private_key) or "iso" (proxmox_cloudinit_bootstrap).<br/>    # To change it, also replace the bastion (-replace on its proxmox_virtual_environment_vm).<br/>    cloud_init = optional(string, "snippet")<br/>  })</pre> | n/a | yes |
+| <a name="input_bastion"></a> [bastion](#input\_bastion) | Bastion configuration. | <pre>object({<br/>    create           = optional(bool, true)<br/>    waggle_slot_name = string<br/>    cloud_init       = optional(string) # removed in 0.6.0; kept only to reject it<br/>  })</pre> | n/a | yes |
 | <a name="input_cluster_metadata"></a> [cluster\_metadata](#input\_cluster\_metadata) | Structured cluster metadata passed through to the autoglue-metadata module. All fields are required unless noted:<br/>  - calico\_network\_calico\_cidr: CIDR block for the Calico pod network (e.g. "10.244.0.0/16").<br/>  - network\_service\_cidr:       CIDR block for Kubernetes services (e.g. "10.96.0.0/12").<br/>  - cloud:                      Target cloud provider. One of: "aws", "proxmox", "hetzner".<br/>  - cloud\_vars:                 Optional map of cloud-specific overrides. When cloud is "proxmox",<br/>                                "calico\_node\_address\_autodetection\_v4" is required. | <pre>object({<br/>    calico_network_calico_cidr = string<br/>    network_service_cidr       = string<br/>    cloud                      = string<br/>    cloud_vars                 = optional(map(string), {}) # Holds the cloud-specific overrides<br/>  })</pre> | n/a | yes |
 | <a name="input_gluekube_docker_image"></a> [gluekube\_docker\_image](#input\_gluekube\_docker\_image) | n/a | `string` | `"ghcr.io/glueops/gluekube"` | no |
 | <a name="input_gluekube_docker_tag"></a> [gluekube\_docker\_tag](#input\_gluekube\_docker\_tag) | n/a | `string` | `"v1.34.11-gluekube.9"` | no |
-| <a name="input_node_pools"></a> [node\_pools](#input\_node\_pools) | n/a | <pre>list(object({<br/>    name                   = string<br/>    node_count             = number<br/>    role                   = string<br/>    subnet                 = optional(string, "public")<br/>    kubernetes_labels      = optional(map(string), {})<br/>    kubernetes_annotations = optional(map(string), {})<br/>    kubernetes_taints = list(object({<br/>      key    = string<br/>      value  = string<br/>      effect = string<br/>    }))<br/>    attached         = optional(bool, true)<br/>    waggle_slot_name = string<br/>    # "snippet" (cicustom snippet, needs provider_credentials.private_key) or "iso" (proxmox_cloudinit_bootstrap).<br/>    # Set it when the pool is created: to change it, rotate to a new pool.<br/>    cloud_init = optional(string, "snippet")<br/>  }))</pre> | n/a | yes |
-| <a name="input_provider_credentials"></a> [provider\_credentials](#input\_provider\_credentials) | n/a | <pre>object({<br/>    name        = string<br/>    endpoint    = string<br/>    api_token   = optional(string)<br/>    insecure    = optional(bool, false)<br/>    private_key = optional(string) # SSH key for root on the PVE nodes; only needed while a pool or the bastion uses cloud_init = "snippet"<br/>  })</pre> | n/a | yes |
+| <a name="input_node_pools"></a> [node\_pools](#input\_node\_pools) | n/a | <pre>list(object({<br/>    name                   = string<br/>    node_count             = number<br/>    role                   = string<br/>    subnet                 = optional(string, "public")<br/>    kubernetes_labels      = optional(map(string), {})<br/>    kubernetes_annotations = optional(map(string), {})<br/>    kubernetes_taints = list(object({<br/>      key    = string<br/>      value  = string<br/>      effect = string<br/>    }))<br/>    attached         = optional(bool, true)<br/>    waggle_slot_name = string<br/>    cloud_init       = optional(string) # removed in 0.6.0; kept only to reject it<br/>  }))</pre> | n/a | yes |
+| <a name="input_provider_credentials"></a> [provider\_credentials](#input\_provider\_credentials) | n/a | <pre>object({<br/>    name        = string<br/>    endpoint    = string<br/>    api_token   = optional(string)<br/>    insecure    = optional(bool, false)<br/>    private_key = optional(string) # removed in 0.6.0; kept only to reject it<br/>  })</pre> | n/a | yes |
 | <a name="input_proxmox_config"></a> [proxmox\_config](#input\_proxmox\_config) | Proxmox infrastructure configuration including network bridges. | <pre>object({<br/>    networks = object({<br/>      public = object({<br/>        name = string<br/>      })<br/>      private = object({<br/>        name    = string<br/>        vlan_id = optional(number)<br/>      })<br/>      nat = object({<br/>        name    = string<br/>        vlan_id = optional(number)<br/>      })<br/>    })<br/>  })</pre> | n/a | yes |
 | <a name="input_waggle_api_key"></a> [waggle\_api\_key](#input\_waggle\_api\_key) | n/a | `string` | `null` | no |
 | <a name="input_waggle_datacenter_id"></a> [waggle\_datacenter\_id](#input\_waggle\_datacenter\_id) | n/a | `string` | `null` | no |

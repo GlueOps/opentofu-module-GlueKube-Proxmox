@@ -7,7 +7,6 @@ data "waggle_slots" "available_slots" {
 
 locals {
   bastion_count = var.bastion.create ? 1 : 0
-  bastion_iso   = var.bastion.cloud_init == "iso"
 
   bastion_slot = one(data.waggle_slots.available_slots)
 
@@ -34,26 +33,6 @@ resource "autoglue_ssh_key" "bastion" {
 
   name    = "${var.autoglue.autoglue_cluster_name}-bastion"
   comment = "GlueKube bastion SSH Key"
-}
-
-resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
-  count = local.bastion_iso ? 0 : local.bastion_count
-
-  content_type = "snippets"
-  datastore_id = "local"
-  node_name    = module.waggle[0].nodes_placement_targets[0].node
-
-  source_raw {
-    data = templatefile("${path.module}/cloudinit/cloud-init-bastion.yaml", {
-      public_key = autoglue_ssh_key.bastion[0].public_key
-      hostname   = "bastion"
-    })
-    file_name = "${var.autoglue.autoglue_cluster_name}-bastion-cloud-init.yaml"
-  }
-
-  lifecycle {
-    ignore_changes = [node_name]
-  }
 }
 
 resource "proxmox_virtual_environment_vm" "bastion" {
@@ -93,31 +72,10 @@ resource "proxmox_virtual_environment_vm" "bastion" {
     type         = "4m"
   }
 
-  dynamic "initialization" {
-    for_each = local.bastion_iso ? [] : [1]
-    content {
-      datastore_id = "local"
-      ip_config {
-        ipv4 {
-          address = "dhcp"
-        }
-      }
-      ip_config {
-        ipv4 {
-          address = "dhcp"
-        }
-      }
-      user_data_file_id = proxmox_virtual_environment_file.bastion_cloud_init[0].id
-    }
-  }
-
   # Empty drive for proxmox_cloudinit_bootstrap to attach the seed ISO to (ide0 is its default interface).
-  dynamic "cdrom" {
-    for_each = local.bastion_iso ? [1] : []
-    content {
-      interface = "ide0"
-      file_id   = "none"
-    }
+  cdrom {
+    interface = "ide0"
+    file_id   = "none"
   }
 
   network_device {
@@ -136,8 +94,8 @@ resource "proxmox_virtual_environment_vm" "bastion" {
     timeout = "15m"
   }
 
-  # With "iso", proxmox_cloudinit_bootstrap starts the VM once the seed ISO is attached.
-  started = !local.bastion_iso
+  # proxmox_cloudinit_bootstrap starts the VM once the seed ISO is attached.
+  started = false
 
   tags = [var.autoglue.autoglue_cluster_name, "bastion"]
 
@@ -147,7 +105,7 @@ resource "proxmox_virtual_environment_vm" "bastion" {
 }
 
 resource "proxmox_cloudinit_bootstrap" "bastion" {
-  count = local.bastion_iso ? local.bastion_count : 0
+  count = local.bastion_count
 
   vm_id        = proxmox_virtual_environment_vm.bastion[0].vm_id
   datastore_id = "local"
@@ -187,30 +145,22 @@ resource "waggle_placements" "bastion" {
 }
 
 
-locals {
-  # Interface name => IPv4 addresses, from the bootstrap ("iso") or from the VM's guest agent ("snippet").
-  bastion_ipv4 = [for i, vm in proxmox_virtual_environment_vm.bastion : local.bastion_iso ? proxmox_cloudinit_bootstrap.bastion[i].ipv4_addresses : zipmap(
-    vm.network_interface_names,
-    vm.ipv4_addresses,
-  )]
-}
-
 resource "autoglue_server" "bastion" {
   count = local.bastion_count
 
   depends_on         = [proxmox_virtual_environment_vm.bastion]
   hostname           = "bastion"
-  private_ip_address = local.bastion_ipv4[0]["eth0"][0]
-  public_ip_address  = local.bastion_ipv4[0]["eth1"][0]
+  private_ip_address = proxmox_cloudinit_bootstrap.bastion[0].ipv4_addresses["eth0"][0]
+  public_ip_address  = proxmox_cloudinit_bootstrap.bastion[0].ipv4_addresses["eth1"][0]
   role               = "bastion"
   ssh_key_id         = autoglue_ssh_key.bastion[0].id
   ssh_user           = "cluster"
 
   lifecycle {
     precondition {
-      # initialization is in ignore_changes, so for an existing VM this reflects how it was created; a running VM can't switch.
-      condition     = length(proxmox_virtual_environment_vm.bastion[0].initialization) == (local.bastion_iso ? 0 : 1)
-      error_message = "The bastion was created with the other cloud_init setting. Set bastion.create = false and apply, then set it back to true with the new cloud_init and apply."
+      # initialization is in ignore_changes, so this shows how the VM was created: a cloud-init drive means snippet mode.
+      condition     = length(proxmox_virtual_environment_vm.bastion[0].initialization) == 0
+      error_message = "The bastion still uses a cloud-init snippet, which 0.6.0 removed. Go back to 0.5.x and move it to cloud_init = \"iso\" first (see its upgrade guide)."
     }
   }
 }
