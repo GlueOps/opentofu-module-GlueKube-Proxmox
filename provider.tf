@@ -1,8 +1,8 @@
 terraform {
   required_providers {
     proxmox = {
-      source  = "bpg/proxmox"
-      version = "0.110.0"
+      source  = "registry.terraform.io/GlueOps/proxmox"
+      version = "0.1.0"
     }
     autoglue = {
       source  = "registry.terraform.io/GlueOps/autoglue"
