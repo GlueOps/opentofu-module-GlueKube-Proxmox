@@ -43,6 +43,7 @@ module "captain" {
 
   bastion = {
     waggle_slot_name = "medium"
+    cloud_init       = "iso"
   }
 
   autoglue = {
@@ -65,6 +66,7 @@ module "captain" {
   node_pools = [
 {
       "name" : "master-node-pool",
+      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 3,
       "role" : "master",
@@ -75,6 +77,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "glueops-platform-node-pool",
+      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 3,
       "kubernetes_labels" : {
@@ -92,6 +95,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "clusterwide",
+      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 2,
       "kubernetes_labels" : {},
@@ -102,6 +106,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "public-loadbalancer-node-pool",
+      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -119,6 +124,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "platform-loadbalancer-node-pool",
+      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -136,6 +142,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "nginx-loadbalancer-node-pool",
+      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -154,12 +161,77 @@ module "captain" {
 }
 ```
 
+## Cloud-init: `snippet` or `iso`
+
+Each node pool and the bastion has a `cloud_init` setting:
+
+- **`"snippet"`** (the default) writes a cloud-init snippet to the node over SSH. It needs
+  `provider_credentials.private_key`, and the snippet stays on node-local storage.
+- **`"iso"`** attaches a temporary seed ISO through the Proxmox API, starts the VM, waits for cloud-init
+  to finish, then deletes the ISO. It needs no SSH and leaves nothing on the node. The ISO goes on the `local`
+  datastore, which must have the `iso` content type.
+
+New clusters should set `cloud_init = "iso"` on every node pool and on the bastion, and leave out `private_key`.
+
+A pool's setting is fixed once it exists: changing it on a running pool fails the plan. To move a pool, rotate it
+onto a new one. To move the bastion, replace it.
+
+**API token privileges for `iso`.** On top of what snippet mode needs, the token needs:
+- `Datastore.AllocateTemplate`, `Datastore.Allocate` and `Datastore.Audit` on `/storage/local`, to upload, delete and
+  list the seed ISO;
+- `VM.Config.CDROM`, `VM.PowerMgmt` and `VM.GuestAgent.FileRead` on the VMs, to attach the ISO, start the VM and read
+  cloud-init's result through the guest agent.
+
+Administrator and PVEAdmin roles already include them.
+
+**If a bootstrap fails.** The apply fails when cloud-init reports an error or doesn't finish within 30 minutes, for
+example because a package mirror is down. The ISO stays attached for debugging, and the VM keeps running.
+cloud-init only runs on a VM's first boot, so applying again doesn't retry it. Replace the VM instead:
+```sh
+tofu apply -replace='module.<name>.module.node_pool["<pool>"].proxmox_virtual_environment_vm.cluster_node["<n>"]'
+tofu apply -replace='module.<name>.proxmox_virtual_environment_vm.bastion[0]'   # the bastion
+```
+`tofu state list | grep cluster_node` shows the node addresses.
+
+## Upgrading from 0.4.x to 0.5.0
+
+0.5.0 moves from `bpg/proxmox` to `GlueOps/proxmox` and adds `cloud_init = "iso"`. A later release removes the
+`"snippet"` mode and `private_key`, so finish all these steps on 0.5.0 before upgrading further.
+
+Run `tofu plan` after each step. Every step must end with a plan that shows no changes before you start the next.
+
+1. **Switch the provider.** Run:
+   ```sh
+   tofu state replace-provider registry.opentofu.org/bpg/proxmox registry.terraform.io/glueops/proxmox
+   ```
+   Point `source` at `v0.5.0` and run `tofu init -upgrade`. The plan should show no changes. If your root module
+   declares `bpg/proxmox` only for this module, remove it. Keep it if your root manages its own `proxmox_*`
+   resources.
+2. **Rotate the worker pools.** For each worker pool, add a new pool with a new name and `cloud_init = "iso"`, and
+   set `attached = false` on the old pool. Apply, then run AutoGlue's `sync` action, which joins the new nodes and
+   drains the old ones. Once the new nodes are `Ready` and the old ones have left the cluster, delete the old pool
+   from your config and apply.
+3. **Rotate the master pools.** Add the new pool with `cloud_init = "iso"` and keep the old one attached: AutoGlue's
+   `rotate-master-nodes` needs a joined master in its inventory. Apply, then run `rotate-master-nodes`. Set
+   `attached = false` on the old pool and apply. Before you delete it, check that the old masters have left both
+   Kubernetes and the etcd member list: deleting master VMs that are still etcd members can cost the cluster quorum.
+   Then delete the old pool and apply.
+4. **Replace the bastion.** Set `bastion.cloud_init = "iso"` and apply with:
+   ```sh
+   tofu apply -replace='module.<name>.proxmox_virtual_environment_vm.bastion[0]'
+   ```
+   If the apply fails with `Provider produced inconsistent result after apply` on the bastion's
+   `private_ip_address` or `public_ip_address`, run `tofu apply -refresh-only`. AutoGlue returns the old IPs after
+   the update but has stored the new ones.
+5. **Drop the SSH key.** Once no pool and not the bastion uses `"snippet"`, remove `private_key` from
+   `provider_credentials`. The plan should show no changes.
+
 ## Requirements
 
 | Name | Version |
 |------|---------|
 | <a name="requirement_autoglue"></a> [autoglue](#requirement\_autoglue) | 0.10.12 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.110.0 |
+| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.0.5 |
 | <a name="requirement_waggle"></a> [waggle](#requirement\_waggle) | 0.1.20 |
 
 ## Providers
@@ -167,7 +239,7 @@ module "captain" {
 | Name | Version |
 |------|---------|
 | <a name="provider_autoglue"></a> [autoglue](#provider\_autoglue) | 0.10.12 |
-| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.110.0 |
+| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.0.5 |
 | <a name="provider_waggle"></a> [waggle](#provider\_waggle) | 0.1.20 |
 
 ## Modules
@@ -191,9 +263,9 @@ module "captain" {
 | autoglue_record_set.cluster_record | resource |
 | autoglue_server.bastion | resource |
 | autoglue_ssh_key.bastion | resource |
-| [proxmox_cloudinit_bootstrap.bastion](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/cloudinit_bootstrap) | resource |
-| [proxmox_virtual_environment_file.bastion_cloud_init](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/virtual_environment_file) | resource |
-| [proxmox_virtual_environment_vm.bastion](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/virtual_environment_vm) | resource |
+| proxmox_cloudinit_bootstrap.bastion | resource |
+| proxmox_virtual_environment_file.bastion_cloud_init | resource |
+| proxmox_virtual_environment_vm.bastion | resource |
 | waggle_placements.bastion | resource |
 | waggle_slots.available_slots | data source |
 
