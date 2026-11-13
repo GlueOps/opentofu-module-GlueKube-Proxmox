@@ -68,6 +68,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "glueops-platform-node-pool-1",
+      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 3,
       "kubernetes_labels" : {
@@ -85,6 +86,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "clusterwide-1",
+      "cloud_init" : "iso",
       "subnet" : "private",
       "node_count" : 2,
       "kubernetes_labels" : {},
@@ -95,6 +97,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "public-loadbalancer-node-pool-1",
+      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -112,6 +115,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "platform-loadbalancer-node-pool-1",
+      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
@@ -129,6 +133,7 @@ module "captain" {
     {
       "role" : "worker",
       "name" : "nginx-loadbalancer-node-pool-1",
+      "cloud_init" : "iso",
       "subnet" : "public",
       "node_count" : 2,
       "kubernetes_labels" : {
