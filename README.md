@@ -176,7 +176,7 @@ Each node pool and the bastion has a `cloud_init` setting:
 New clusters should set `cloud_init = "iso"` on every node pool and on the bastion, and leave out `private_key`.
 
 A pool's setting is fixed once it exists: changing it on a running pool fails the plan. To move a pool, rotate it
-onto a new one. To move the bastion, replace it.
+onto a new one. To move the bastion, disable it and enable it again with the new setting (see step 4 below).
 
 **API token privileges for `iso`.** On top of what snippet mode needs, the token needs:
 - `Datastore.AllocateTemplate`, `Datastore.Allocate` and `Datastore.Audit` on `/storage/local`, to upload, delete and
@@ -218,13 +218,10 @@ Run `tofu plan` after each step. Every step must end with a plan that shows no c
    `attached = false` on the old pool and apply. Before you delete it, check that the old masters have left both
    Kubernetes and the etcd member list: deleting master VMs that are still etcd members can cost the cluster quorum.
    Then delete the old pool and apply.
-4. **Replace the bastion.** Set `bastion.cloud_init = "iso"` and apply with:
-   ```sh
-   tofu apply -replace='module.<name>.proxmox_virtual_environment_vm.bastion[0]'
-   ```
-   If the apply fails with `Provider produced inconsistent result after apply` on the bastion's
-   `private_ip_address` or `public_ip_address`, run `tofu apply -refresh-only`. AutoGlue returns the old IPs after
-   the update but has stored the new ones.
+4. **Move the bastion.** Set `bastion.create = false` and apply: the bastion and its AutoGlue registration are
+   deleted. Then set `bastion.create = true` and `bastion.cloud_init = "iso"` and apply: a new bastion is built from
+   the ISO and registered. Do both applies back to back: AutoGlue actions that go through the bastion, such as
+   `sync`, can't run while it's gone. Kubernetes keeps running.
 5. **Drop the SSH key.** Once no pool and not the bastion uses `"snippet"`, remove `private_key` from
    `provider_credentials`. The plan should show no changes.
 

@@ -210,7 +210,7 @@ resource "autoglue_server" "bastion" {
     precondition {
       # initialization is in ignore_changes, so for an existing VM this reflects how it was created; a running VM can't switch.
       condition     = length(proxmox_virtual_environment_vm.bastion[0].initialization) == (local.bastion_iso ? 0 : 1)
-      error_message = "The bastion was created with the other cloud_init setting. Replace it: tofu apply -replace='<module address>.proxmox_virtual_environment_vm.bastion[0]'."
+      error_message = "The bastion was created with the other cloud_init setting. Set bastion.create = false and apply, then set it back to true with the new cloud_init and apply."
     }
   }
 }
