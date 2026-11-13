@@ -27,26 +27,6 @@ resource "autoglue_ssh_key" "ssh_key" {
 
 locals {
   nodes = toset([for i in range(0, var.node_count) : tostring(i)])
-  iso   = var.cloud_init == "iso"
-}
-
-resource "proxmox_virtual_environment_file" "node_cloud_init" {
-  for_each     = local.iso ? toset([]) : local.nodes
-  content_type = "snippets"
-  datastore_id = "local"
-  node_name    = module.waggle.nodes_placement_targets[each.key].node
-
-  source_raw {
-    data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {
-      public_key = autoglue_ssh_key.ssh_key.public_key
-      hostname   = "${var.role}-${var.name}-${each.key}"
-    })
-    file_name = "${var.cluster_name}-${var.role}-${var.name}-${each.key}-cloud-init.yaml"
-  }
-
-  lifecycle {
-    ignore_changes = [node_name, source_raw]
-  }
 }
 
 resource "proxmox_virtual_environment_vm" "cluster_node" {
@@ -87,36 +67,10 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
     type         = "4m"
   }
 
-  dynamic "initialization" {
-    for_each = local.iso ? [] : [1]
-    content {
-      datastore_id = "local"
-      ip_config {
-        ipv4 {
-          address = "dhcp"
-        }
-      }
-
-      dynamic "ip_config" {
-        for_each = var.subnet == "public" ? [1] : []
-        content {
-          ipv4 {
-            address = "dhcp"
-          }
-        }
-      }
-
-      user_data_file_id = proxmox_virtual_environment_file.node_cloud_init[each.key].id
-    }
-  }
-
   # Empty drive for proxmox_cloudinit_bootstrap to attach the seed ISO to (ide0 is its default interface).
-  dynamic "cdrom" {
-    for_each = local.iso ? [1] : []
-    content {
-      interface = "ide0"
-      file_id   = "none"
-    }
+  cdrom {
+    interface = "ide0"
+    file_id   = "none"
   }
 
   dynamic "network_device" {
@@ -141,8 +95,8 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
     timeout = "15m"
   }
 
-  # With "iso", proxmox_cloudinit_bootstrap starts the VM once the seed ISO is attached.
-  started = !local.iso
+  # proxmox_cloudinit_bootstrap starts the VM once the seed ISO is attached.
+  started = false
 
   stop_on_destroy = true
 
@@ -155,10 +109,10 @@ resource "proxmox_virtual_environment_vm" "cluster_node" {
 }
 
 resource "proxmox_cloudinit_bootstrap" "node" {
-  for_each     = local.iso ? local.nodes : toset([])
+  for_each     = local.nodes
   vm_id        = proxmox_virtual_environment_vm.cluster_node[each.key].vm_id
   datastore_id = "local"
-  # Named like the snippets, so the e2e nuke matches leftovers by cluster.
+  # Starts with the cluster name, so the e2e nuke matches leftovers by cluster.
   file_name = "${var.cluster_name}-${var.role}-${var.name}-${each.key}-cloud-init.iso"
 
   user_data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {

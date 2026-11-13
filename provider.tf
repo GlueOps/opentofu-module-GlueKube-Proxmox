@@ -19,11 +19,6 @@ provider "proxmox" {
   endpoint  = var.provider_credentials.endpoint
   api_token = var.provider_credentials.api_token
   insecure  = var.provider_credentials.insecure
-  ssh {
-    agent       = false
-    username    = "root"
-    private_key = var.provider_credentials.private_key
-  }
 }
 
 provider "autoglue" {
