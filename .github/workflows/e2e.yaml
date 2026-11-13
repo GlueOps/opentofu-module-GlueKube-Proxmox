@@ -131,7 +131,7 @@ jobs:
           org-secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
 
       - name: Pre-Nuke Proxmox resources
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}
@@ -789,14 +789,14 @@ jobs:
           org-secret: ${{ secrets.AUTOGLUE_ORG_SECRET }}
 
       # Backstop cleanup: force-delete any Proxmox VMs tagged with the cluster name and
-      # any leftover cloud-init snippets. Same always() rationale as the AutoGlue nuke.
+      # any leftover cloud-init snippets and seed ISOs. Same always() rationale as the AutoGlue nuke.
       # The whole provider_credentials object (JSON or HCL) is passed through; the script
       # extracts endpoint/api_token/insecure itself. Reaches Proxmox over the Tailscale
       # exit node set up above.
       - name: Nuke Proxmox resources
         id: nuke_proxmox
         if: ${{ always() }}
-        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@26c6e4123fb95626589f141e39e0c79928eaf596 # v1.1.1
+        uses: GlueOps/github-actions-gluekube-e2e/nuke-proxmox@ebde8675184930d004a759a5d84c42ec49f8c5a5 # v1.2.0
         with:
           provider-credentials: ${{ secrets.PROVIDER_CREDENTIALS }}
           cluster-name: ${{ secrets.AUTOGLUE_CLUSTER_NAME }}

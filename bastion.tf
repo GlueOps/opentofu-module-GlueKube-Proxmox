@@ -151,6 +151,7 @@ resource "proxmox_cloudinit_bootstrap" "bastion" {
 
   vm_id        = proxmox_virtual_environment_vm.bastion[0].vm_id
   datastore_id = "local"
+  file_name    = "${var.autoglue.autoglue_cluster_name}-bastion-cloud-init.iso"
 
   user_data = templatefile("${path.module}/cloudinit/cloud-init-bastion.yaml", {
     public_key = autoglue_ssh_key.bastion[0].public_key

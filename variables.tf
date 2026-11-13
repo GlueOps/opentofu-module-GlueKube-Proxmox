@@ -114,6 +114,12 @@ variable "node_pools" {
     error_message = "Each node pool cloud_init must be either 'snippet' or 'iso'."
   }
 
+  validation {
+    # The pool name is part of the seed ISO's name, which Proxmox only keeps as is with these characters.
+    condition     = alltrue([for np in var.node_pools : np.cloud_init != "iso" || can(regex("^[A-Za-z0-9_.-]+$", np.name))])
+    error_message = "A node pool with cloud_init = \"iso\" needs a name of only letters, digits, '.', '_' and '-'."
+  }
+
 }
 
 variable "cluster_metadata" {

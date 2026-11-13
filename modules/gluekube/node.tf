@@ -158,6 +158,8 @@ resource "proxmox_cloudinit_bootstrap" "node" {
   for_each     = local.iso ? local.nodes : toset([])
   vm_id        = proxmox_virtual_environment_vm.cluster_node[each.key].vm_id
   datastore_id = "local"
+  # Named like the snippets, so the e2e nuke matches leftovers by cluster.
+  file_name = "${var.cluster_name}-${var.role}-${var.name}-${each.key}-cloud-init.iso"
 
   user_data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {
     public_key = autoglue_ssh_key.ssh_key.public_key

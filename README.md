@@ -169,7 +169,9 @@ Each node pool and the bastion has a `cloud_init` setting:
   `provider_credentials.private_key`, and the snippet stays on node-local storage.
 - **`"iso"`** attaches a temporary seed ISO through the Proxmox API, starts the VM, waits for cloud-init
   to finish, then deletes the ISO. It needs no SSH and leaves nothing on the node. The ISO goes on the `local`
-  datastore, which must have the `iso` content type.
+  datastore, which must have the `iso` content type, as `<cluster>-<role>-<pool>-<index>-cloud-init.iso` (the
+  bastion's is `<cluster>-bastion-cloud-init.iso`), so a pool on `"iso"` needs a name of only letters, digits, `.`,
+  `_` and `-`.
 
 New clusters should set `cloud_init = "iso"` on every node pool and on the bastion, and leave out `private_key`.
 
@@ -195,7 +197,7 @@ tofu apply -replace='module.<name>.proxmox_virtual_environment_vm.bastion[0]'   
 
 ## Upgrading from 0.4.x to 0.5.0
 
-0.5.0 moves from `bpg/proxmox` to `GlueOps/proxmox` and adds `cloud_init = "iso"`. A later release removes the
+0.5.0 moves from `bpg/proxmox` to `GlueOps/proxmox` 0.1.0 and adds `cloud_init = "iso"`. A later release removes the
 `"snippet"` mode and `private_key`, so finish all these steps on 0.5.0 before upgrading further.
 
 Run `tofu plan` after each step. Every step must end with a plan that shows no changes before you start the next.
@@ -231,7 +233,7 @@ Run `tofu plan` after each step. Every step must end with a plan that shows no c
 | Name | Version |
 |------|---------|
 | <a name="requirement_autoglue"></a> [autoglue](#requirement\_autoglue) | 0.10.12 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.0.5 |
+| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.1.0 |
 | <a name="requirement_waggle"></a> [waggle](#requirement\_waggle) | 0.1.20 |
 
 ## Providers
@@ -239,7 +241,7 @@ Run `tofu plan` after each step. Every step must end with a plan that shows no c
 | Name | Version |
 |------|---------|
 | <a name="provider_autoglue"></a> [autoglue](#provider\_autoglue) | 0.10.12 |
-| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.0.5 |
+| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.1.0 |
 | <a name="provider_waggle"></a> [waggle](#provider\_waggle) | 0.1.20 |
 
 ## Modules
