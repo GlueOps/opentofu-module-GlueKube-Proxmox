@@ -162,7 +162,7 @@ them, so VMs can migrate freely. The ISO goes on the `local` datastore, which mu
 `<cluster>-<role>-<pool>-<index>-cloud-init.iso` (the bastion's is `<cluster>-bastion-cloud-init.iso`), so node
 pool names may only use letters, digits, `.`, `_` and `-`.
 
-**API token privileges.** The token needs:
+**API token privileges.** On top of the privileges needed to create and manage VMs, the token needs:
 - `Datastore.AllocateTemplate`, `Datastore.Allocate` and `Datastore.Audit` on `/storage/local`, to upload, delete and
   list the seed ISO;
 - `VM.Config.CDROM`, `VM.PowerMgmt` and `VM.GuestAgent.FileRead` on the VMs, to attach the ISO, start the VM and read
@@ -181,16 +181,13 @@ tofu apply -replace='module.<name>.proxmox_virtual_environment_vm.bastion[0]'   
 
 ## Upgrading from 0.5.x to 0.6.0
 
-0.6.0 removes the `"snippet"` mode: `cloud_init` on the node pools and the bastion, and
-`provider_credentials.private_key`, are gone. Before upgrading, every pool and the bastion must already run on
-`cloud_init = "iso"` with `private_key` removed: follow the 0.5.x upgrade guide (in the v0.5 README) to the end.
+0.6.0 removes the `"snippet"` mode, so first finish the
+[0.5.x upgrade guide](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/blob/v0.5.0/README.md#upgrading-from-04x-to-050):
+every pool and the bastion on `cloud_init = "iso"`, `private_key` removed. Coming from 0.4.x, go through 0.5.x.
 
-1. Delete every `cloud_init` line from `node_pools` and `bastion`, and `private_key` from `provider_credentials`.
-   The plan fails with a "removed in 0.6.0" message until they're gone.
-2. Point `source` at `v0.6.0` and run `tofu init -upgrade`. The plan should show no changes.
-
-If the plan says a pool or the bastion "still uses cloud-init snippets", it was never moved to `"iso"`: go back to
-0.5.x and finish its upgrade guide first. Coming from 0.4.x, upgrade to 0.5.x first.
+Then point `source` at `v0.6.0`, delete every `cloud_init` line from `node_pools` and `bastion` and `private_key` from
+`provider_credentials` (the plan names any that are left), and run `tofu init -upgrade`. The plan should show no
+changes.
 
 ## Requirements
 

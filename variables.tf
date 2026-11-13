@@ -1,4 +1,6 @@
 variable "provider_credentials" {
+  # Sensitive, so a failing validation can't print the API token or a stale private_key.
+  sensitive = true
   type = object({
     name        = string
     endpoint    = string

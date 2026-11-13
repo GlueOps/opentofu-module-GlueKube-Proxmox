@@ -8,8 +8,7 @@ module "captain" {
   gluekube_docker_image = var.gluekube_docker_image
   gluekube_docker_tag   = var.gluekube_docker_tag
 
-  # The e2e secret may still carry private_key, which 0.6.0 rejects; the module no longer uses SSH.
-  provider_credentials = merge(var.provider_credentials, { private_key = null })
+  provider_credentials = var.provider_credentials
 
   waggle_endpoint      = var.waggle_endpoint
   waggle_api_key       = var.waggle_api_key
