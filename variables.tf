@@ -1,11 +1,18 @@
 variable "provider_credentials" {
+  # Sensitive, so a failing validation can't print the API token or a stale private_key.
+  sensitive = true
   type = object({
     name        = string
     endpoint    = string
     api_token   = optional(string)
     insecure    = optional(bool, false)
-    private_key = optional(string) # SSH key for root on the PVE nodes; only needed while a pool or the bastion uses cloud_init = "snippet"
+    private_key = optional(string) # removed in 0.6.0; kept only to reject it
   })
+
+  validation {
+    condition     = var.provider_credentials.private_key == null
+    error_message = "provider_credentials.private_key was removed in 0.6.0: the module no longer uses SSH. Delete it. If a pool or the bastion still uses cloud-init snippets, go back to 0.5.x and move them to cloud_init = \"iso\" first."
+  }
 }
 
 variable "gluekube_docker_image" {
@@ -24,14 +31,12 @@ variable "bastion" {
   type = object({
     create           = optional(bool, true)
     waggle_slot_name = string
-    # "snippet" (cicustom snippet, needs provider_credentials.private_key) or "iso" (proxmox_cloudinit_bootstrap).
-    # To change it, also replace the bastion (-replace on its proxmox_virtual_environment_vm).
-    cloud_init = optional(string, "snippet")
+    cloud_init       = optional(string) # removed in 0.6.0; kept only to reject it
   })
 
   validation {
-    condition     = contains(["snippet", "iso"], var.bastion.cloud_init)
-    error_message = "bastion.cloud_init must be either 'snippet' or 'iso'."
+    condition     = var.bastion.cloud_init == null
+    error_message = "bastion.cloud_init was removed in 0.6.0: the bastion always boots from a seed ISO. Delete it."
   }
 }
 
@@ -89,9 +94,7 @@ variable "node_pools" {
     }))
     attached         = optional(bool, true)
     waggle_slot_name = string
-    # "snippet" (cicustom snippet, needs provider_credentials.private_key) or "iso" (proxmox_cloudinit_bootstrap).
-    # Set it when the pool is created: to change it, rotate to a new pool.
-    cloud_init = optional(string, "snippet")
+    cloud_init       = optional(string) # removed in 0.6.0; kept only to reject it
   }))
 
   validation {
@@ -110,14 +113,14 @@ variable "node_pools" {
   }
 
   validation {
-    condition     = alltrue([for np in var.node_pools : contains(["snippet", "iso"], np.cloud_init)])
-    error_message = "Each node pool cloud_init must be either 'snippet' or 'iso'."
+    condition     = alltrue([for np in var.node_pools : np.cloud_init == null])
+    error_message = "node_pools[*].cloud_init was removed in 0.6.0: every pool boots from a seed ISO. Delete it."
   }
 
   validation {
     # The pool name is part of the seed ISO's name, which Proxmox only keeps as is with these characters.
-    condition     = alltrue([for np in var.node_pools : np.cloud_init != "iso" || can(regex("^[A-Za-z0-9_.-]+$", np.name))])
-    error_message = "A node pool with cloud_init = \"iso\" needs a name of only letters, digits, '.', '_' and '-'."
+    condition     = alltrue([for np in var.node_pools : can(regex("^[A-Za-z0-9_.-]+$", np.name))])
+    error_message = "Node pool names may only use letters, digits, '.', '_' and '-'."
   }
 
 }

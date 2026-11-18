@@ -1,5 +1,5 @@
 resource "autoglue_cluster" "cluster" {
-  cluster_provider = var.provider_credentials.name
+  cluster_provider = nonsensitive(var.provider_credentials.name) # a label; provider_credentials is sensitive for the token
   docker_image     = var.gluekube_docker_image
   docker_tag       = var.gluekube_docker_tag
   name             = var.autoglue.autoglue_cluster_name

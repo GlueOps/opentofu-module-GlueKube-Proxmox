@@ -1,10 +1,10 @@
 variable "provider_credentials" {
+  # The e2e secret may still have private_key; leaving it out of this type drops it before the module sees it.
   type = object({
-    name        = string
-    endpoint    = string
-    api_token   = optional(string)
-    insecure    = optional(bool, false)
-    private_key = optional(string)
+    name      = string
+    endpoint  = string
+    api_token = optional(string)
+    insecure  = optional(bool, false)
   })
 }
 

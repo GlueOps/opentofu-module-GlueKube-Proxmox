@@ -36,7 +36,6 @@ module "captain" {
 
   bastion = {
     waggle_slot_name = "medium"
-    cloud_init       = "iso"
   }
 
   autoglue = {
