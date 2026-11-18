@@ -203,7 +203,7 @@ changes.
 | Name | Version |
 |------|---------|
 | <a name="requirement_autoglue"></a> [autoglue](#requirement\_autoglue) | 0.10.12 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.1.0 |
+| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.2.0 |
 | <a name="requirement_waggle"></a> [waggle](#requirement\_waggle) | 0.1.20 |
 
 ## Providers
@@ -211,7 +211,7 @@ changes.
 | Name | Version |
 |------|---------|
 | <a name="provider_autoglue"></a> [autoglue](#provider\_autoglue) | 0.10.12 |
-| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.1.0 |
+| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.2.0 |
 | <a name="provider_waggle"></a> [waggle](#provider\_waggle) | 0.1.20 |
 
 ## Modules
