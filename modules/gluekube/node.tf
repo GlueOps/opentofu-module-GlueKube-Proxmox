@@ -133,6 +133,8 @@ resource "proxmox_cloudinit_bootstrap" "node" {
 
   lifecycle {
     replace_triggered_by = [proxmox_virtual_environment_vm.cluster_node[each.key].id]
+    # The seed only applies on first boot, and GlueOps/proxmox 0.2.0+ fails the apply when it changes; new VMs get the current one.
+    ignore_changes = [user_data, network_config]
   }
 }
 

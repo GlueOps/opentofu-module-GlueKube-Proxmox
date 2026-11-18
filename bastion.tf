@@ -129,6 +129,8 @@ resource "proxmox_cloudinit_bootstrap" "bastion" {
 
   lifecycle {
     replace_triggered_by = [proxmox_virtual_environment_vm.bastion[0].id]
+    # The seed only applies on first boot, and GlueOps/proxmox 0.2.0+ fails the apply when it changes; new VMs get the current one.
+    ignore_changes = [user_data, network_config]
   }
 }
 
