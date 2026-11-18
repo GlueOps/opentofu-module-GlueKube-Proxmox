@@ -27,7 +27,7 @@ resource "autoglue_ssh_key" "ssh_key" {
 # The cloud-config shared with the AWS module. Only what is specific to this platform is passed
 # in; the update policy, the post-upgrade reboot and the `cluster` user live there.
 module "cloud_init" {
-  source   = "git::https://github.com/GlueOps/opentofu-module-GlueKube-cloudinit.git?ref=v0.1.0"
+  source   = "git::https://github.com/GlueOps/opentofu-module-GlueKube-cloudinit.git?ref=v0.2.0"
   for_each = toset([for i in range(0, var.node_count) : tostring(i)])
 
   hostname   = "${var.role}-${var.name}-${each.key}"

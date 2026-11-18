@@ -36,7 +36,7 @@ resource "autoglue_ssh_key" "bastion" {
 }
 
 module "bastion_cloud_init" {
-  source = "git::https://github.com/GlueOps/opentofu-module-GlueKube-cloudinit.git?ref=v0.1.0"
+  source = "git::https://github.com/GlueOps/opentofu-module-GlueKube-cloudinit.git?ref=v0.2.0"
   count  = local.bastion_count
 
   hostname   = "bastion"
