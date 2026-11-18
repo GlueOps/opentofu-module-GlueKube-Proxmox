@@ -24,6 +24,34 @@ resource "autoglue_ssh_key" "ssh_key" {
   comment = "GlueKube ${var.role} SSH Key"
 }
 
+# The cloud-config shared with the AWS module. Only what is specific to this platform is passed
+# in; the update policy, the post-upgrade reboot and the `cluster` user live there.
+module "cloud_init" {
+  source   = "git::https://github.com/GlueOps/opentofu-module-GlueKube-cloudinit.git?ref=v0.2.0"
+  for_each = toset([for i in range(0, var.node_count) : tostring(i)])
+
+  hostname   = "${var.role}-${var.name}-${each.key}"
+  public_key = autoglue_ssh_key.ssh_key.public_key
+
+  # Calico's VXLAN traffic arrives on an interface other than the one the route points back
+  # through, which strict reverse-path filtering drops.
+  extra_sysctls = {
+    "net.ipv4.conf.all.rp_filter"          = "0"
+    "net.ipv4.conf.default.rp_filter"      = "0"
+    "net.ipv4.conf.eth0.rp_filter"         = "0"
+    "net.ipv4.conf.vxlan.calico.rp_filter" = "0"
+  }
+  extra_packages = ["qemu-guest-agent"]
+  extra_write_files = [{
+    path        = "/etc/glueops/public-interface"
+    content     = "eth1\n"
+    permissions = "0644"
+  }]
+  extra_runcmd = [
+    "systemctl enable --now qemu-guest-agent",
+    "passwd -d root",
+  ]
+}
 
 resource "proxmox_virtual_environment_file" "node_cloud_init" {
   for_each     = toset([for i in range(0, var.node_count) : tostring(i)])
@@ -32,10 +60,7 @@ resource "proxmox_virtual_environment_file" "node_cloud_init" {
   node_name    = module.waggle.nodes_placement_targets[each.key].node
 
   source_raw {
-    data = templatefile("${path.module}/cloudinit/cloud-init.yaml", {
-      public_key = autoglue_ssh_key.ssh_key.public_key
-      hostname   = "${var.role}-${var.name}-${each.key}"
-    })
+    data      = module.cloud_init[each.key].user_data
     file_name = "${var.cluster_name}-${var.role}-${var.name}-${each.key}-cloud-init.yaml"
   }
 

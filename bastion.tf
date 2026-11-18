@@ -35,6 +35,20 @@ resource "autoglue_ssh_key" "bastion" {
   comment = "GlueKube bastion SSH Key"
 }
 
+module "bastion_cloud_init" {
+  source = "git::https://github.com/GlueOps/opentofu-module-GlueKube-cloudinit.git?ref=v0.2.0"
+  count  = local.bastion_count
+
+  hostname   = "bastion"
+  public_key = autoglue_ssh_key.bastion[0].public_key
+
+  extra_packages = ["qemu-guest-agent"]
+  extra_runcmd = [
+    "systemctl enable --now qemu-guest-agent",
+    "passwd -d root",
+  ]
+}
+
 resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
   count = local.bastion_count
 
@@ -44,10 +58,7 @@ resource "proxmox_virtual_environment_file" "bastion_cloud_init" {
 
 
   source_raw {
-    data = templatefile("${path.module}/cloudinit/cloud-init-bastion.yaml", {
-      public_key = autoglue_ssh_key.bastion[0].public_key
-      hostname   = "bastion"
-    })
+    data      = module.bastion_cloud_init[0].user_data
     file_name = "${var.autoglue.autoglue_cluster_name}-bastion-cloud-init.yaml"
   }
 }
