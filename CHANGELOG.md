@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.4.0...v0.5.0) (2026-11-23)
+
+
+### Features
+
+* use shared cloud-init module; disable auto-updates and always reboot after upgrade ([#76](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/76)) ([bfa5977](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/bfa5977d3fc34a4dce4b361d36171eaf8d268eec))
+
+
+### Miscellaneous Chores
+
+* drop config:recommended from renovate.json ([#62](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/issues/62)) ([e9cb05f](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/commit/e9cb05f35b4a22a0e69351c02bd29552a6e1f0ec))
+
 ## [0.4.0](https://github.com/GlueOps/opentofu-module-GlueKube-Proxmox/compare/v0.3.7...v0.4.0) (2026-10-16)
 
 
